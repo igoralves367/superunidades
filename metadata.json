@@ -1,0 +1,7 @@
+{
+  "name": "Desbrava Clube",
+  "description": "Central de gestão premium para clubes de Desbravadores. Secretaria, classes, financeiro e dashboard com design moderno neon.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

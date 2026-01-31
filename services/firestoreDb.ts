@@ -246,7 +246,27 @@ export const deleteClasse = async (clubId: string, id: string) => {
 export const updateClasse = (clubId: string, id: string, payload: any) => updateDoc(doc(db, 'clubs', clubId, 'classes', id), deepCleanUndefined(payload));
 
 // --- UNIDADES ---
-export const listUnidades = (clubId: string) => listCol(clubId, 'unidades') as Promise<Unidade[]>;
+export const listUnidades = async (clubId: string): Promise<Unidade[]> => {
+  const unidades = await listCol(clubId, 'unidades') as Unidade[];
+
+  return unidades.map(u => {
+    const legacyImage =
+      (u as any).fotoUrl ||
+      (u as any).imagemUrl ||
+      (u as any).foto ||
+      (u as any).image ||
+      (u as any).logoUrl;
+
+    const normalizedSlug = normalizeSlug(u.nome || u.id || '');
+    const localAsset = normalizedSlug ? `/unidades/${normalizedSlug}.png` : undefined;
+
+    return {
+      ...u,
+      // Prioridade: campo novo → legados → asset local na pasta public/unidades (mesmo nome da unidade em slug)
+      imageUrl: u.imageUrl || legacyImage || localAsset || undefined
+    };
+  });
+};
 export const createUnidade = (clubId: string, payload: any) => {
   validateClub(clubId);
   const docRef = doc(collection(db, 'clubs', clubId, 'unidades'));

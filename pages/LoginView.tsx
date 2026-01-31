@@ -35,7 +35,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onCreateClubClick }) => {
       <div className="w-full max-w-sm space-y-8 animate-fade-in relative z-10">
         <div className="text-center space-y-4">
           <div className="w-24 h-24 rounded-[32px] bg-[#0B0F1A] mx-auto flex items-center justify-center shadow-2xl shadow-[#E53935]/40 border-4 border-[#0B0F1A] overflow-hidden">
-            <img src="/logo-desbravadores.png" alt="Desbravadores" className="w-16 h-16 object-contain" />
+            <picture>
+              <source srcSet="/logo-desbravadores.png" type="image/png" />
+              <img src="/logo-desbravadores.svg" alt="Desbravadores" className="w-16 h-16 object-contain" />
+            </picture>
           </div>
           <div className="space-y-1">
             <h1 className="text-5xl font-black tracking-tighter text-white">

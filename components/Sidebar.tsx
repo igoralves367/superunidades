@@ -31,7 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTa
     <div className="flex flex-col h-full bg-[#0B0F1A] border-r border-[#1F2937] w-64 p-4">
       <div className="flex items-center gap-3 mb-10 px-2">
         <div className="w-10 h-10 rounded-lg bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center shadow-lg shadow-[#E53935]/20 overflow-hidden">
-          <img src="/logo-desbravadores.png" alt="Desbravadores" className="w-8 h-8 object-contain" />
+          <picture>
+            <source srcSet="/logo-desbravadores.png" type="image/png" />
+            <img src="/logo-desbravadores.svg" alt="Desbravadores" className="w-8 h-8 object-contain" />
+          </picture>
         </div>
         <div>
           <span className="font-black text-lg tracking-tighter block leading-none">DESBRAVA<span className="text-[#E53935]"> CLUBE</span></span>

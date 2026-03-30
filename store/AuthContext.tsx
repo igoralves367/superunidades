@@ -15,11 +15,13 @@ import {
 import { auth, db } from '../firebase';
 import { Usuario, PerfilAcesso } from '../types';
 import { 
+  createPublicClubSlug,
   ensureDefaultClasses, 
   ensureDefaultRequisitos, 
   ensureDefaultCargos,
   ensureDefaultUnidades,
-  ensureDefaultInstructorTypes
+  ensureDefaultInstructorTypes,
+  ensureDefaultRanking
 } from '../services/firestoreDb';
 
 interface AuthContextType {
@@ -57,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await ensureDefaultCargos(profile.clubeId);
             await ensureDefaultUnidades(profile.clubeId);
             await ensureDefaultInstructorTypes(profile.clubeId);
+            await ensureDefaultRanking(profile.clubeId);
           } else {
             const newClubId = `clube-${Math.random().toString(36).slice(2, 11)}`;
             const pendingClubName = localStorage.getItem(PENDING_CLUB_NAME_KEY);
@@ -68,6 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await setDoc(doc(db, 'clubs', newClubId), {
               id: newClubId,
               nome: clubName,
+              publicSlug: createPublicClubSlug(clubName),
               createdAt: serverTimestamp()
             });
 
@@ -76,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await ensureDefaultCargos(newClubId);
             await ensureDefaultUnidades(newClubId);
             await ensureDefaultInstructorTypes(newClubId);
+            await ensureDefaultRanking(newClubId);
 
             const newProfile: Usuario = {
               id: firebaseUser.uid,

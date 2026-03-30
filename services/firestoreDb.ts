@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
+  Clube,
   Unidade, 
   Classe, 
   Requisito, 
@@ -29,9 +30,16 @@ import {
   Parcela,
   LancamentoCaixa,
   ReceitaCampori,
-  ClubaoUnidadeDoc
+  ClubaoUnidadeDoc,
+  RankingQuarter,
+  RankingRequirement,
+  RankingProgressEntry,
+  RankingUnitProgressDoc
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
+import { buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
+import { baseUnitsSeed } from '../seed/baseUnits';
+import { calculateRequirementBreakdown } from './ranking';
 
 const validateClub = (clubId: string) => {
   if (!clubId) throw new Error("ID do Clube não identificado.");
@@ -72,6 +80,19 @@ export const normalizeSlug = (text: string): string => {
     .replace(/\s+/g, '_');
 };
 
+export const createPublicClubSlug = (text: string): string => {
+  const base = text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/gi, ' ')
+    .trim()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-');
+
+  return base || 'clube';
+};
+
 export const createDedupeKey = (text: string): string => {
   return text
     .toLowerCase()
@@ -102,6 +123,39 @@ const listCol = async (clubId: string, path: string) => {
   const snap = await getDocs(colRef);
   const items = snap.docs.map(d => mapColData(d.id, d.data(), path));
   return items.sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+};
+
+export const getClub = async (clubId: string): Promise<Clube | null> => {
+  validateClub(clubId);
+  const snap = await getDoc(doc(db, 'clubs', clubId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Clube;
+};
+
+export const ensureClubPublicSlug = async (clubId: string): Promise<string> => {
+  const club = await getClub(clubId);
+  if (!club) return clubId;
+
+  const slug = club.publicSlug || createPublicClubSlug(club.nome || clubId);
+  if (club.publicSlug !== slug) {
+    await updateDoc(doc(db, 'clubs', clubId), deepCleanUndefined({
+      publicSlug: slug,
+      updatedAt: serverTimestamp()
+    }));
+  }
+
+  return slug;
+};
+
+export const findClubByPublicSlug = async (publicSlug: string): Promise<Clube | null> => {
+  const slug = publicSlug.trim().toLowerCase();
+  if (!slug) return null;
+
+  const snap = await getDocs(query(collection(db, 'clubs'), where('publicSlug', '==', slug)));
+  if (snap.empty) return null;
+
+  const first = snap.docs[0];
+  return { id: first.id, ...first.data() } as Clube;
 };
 
 // --- CARGOS ---
@@ -423,10 +477,15 @@ export const ensureDefaultCargos = async (clubId: string) => {
 export const ensureDefaultUnidades = async (clubId: string) => {
   validateClub(clubId);
   const metaRef = doc(db, 'clubs', clubId, 'meta', 'seed_unidades');
-  if ((await getDoc(metaRef)).exists()) return;
   const batch = writeBatch(db);
-  batch.set(doc(db, 'clubs', clubId, 'unidades', 'unidade_onu'), { id: 'unidade_onu', nome: 'ONU (Diretoria)', tipo: 'DIRETORIA', ordem: 0, ativo: true, origem: 'PADRAO', locked: true, participatesClubao: false }, { merge: true });
-  batch.set(metaRef, { done: true });
+  baseUnitsSeed.forEach(unit => {
+    batch.set(
+      doc(db, 'clubs', clubId, 'unidades', unit.id),
+      { ...unit, clubeId: clubId, origem: 'PADRAO' },
+      { merge: true }
+    );
+  });
+  batch.set(metaRef, { done: true, syncedAt: serverTimestamp(), version: 2 }, { merge: true });
   await batch.commit();
 };
 
@@ -583,6 +642,81 @@ export const listClubaoUnidades = async (clubId: string): Promise<ClubaoUnidadeD
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as ClubaoUnidadeDoc));
 };
 
+export const syncLegacyClubaoToRanking = async (
+  clubId: string,
+  quarterId: string,
+  requirements: RankingRequirement[]
+) => {
+  validateClub(clubId);
+  if (!quarterId || requirements.length === 0) return;
+
+  const [legacyDocsSnap, rankingSnap] = await Promise.all([
+    getDocs(collection(db, 'clubs', clubId, 'clubao_unidades')),
+    getDocs(query(collection(db, 'clubs', clubId, 'ranking_progress'), where('quarterId', '==', quarterId)))
+  ]);
+
+  if (legacyDocsSnap.empty) return;
+
+  const rankingByUnit = new Map(
+    rankingSnap.docs.map(docSnap => [docSnap.data().unitId as string, { id: docSnap.id, ...docSnap.data() } as RankingUnitProgressDoc])
+  );
+
+  for (const legacySnap of legacyDocsSnap.docs) {
+    const legacy = { id: legacySnap.id, ...legacySnap.data() } as ClubaoUnidadeDoc;
+    const legacyResults = legacy.resultados || {};
+    const existingDoc = rankingByUnit.get(legacy.unidadeId);
+    const merged: Record<string, RankingProgressEntry> = { ...(existingDoc?.resultados || {}) };
+    let changed = false;
+
+    requirements.forEach(requirement => {
+      const legacyEntry = legacyResults[requirement.id];
+      if (!legacyEntry || merged[requirement.id]) return;
+
+      const draft: RankingProgressEntry = {
+        requirementId: requirement.id,
+        completed: !!legacyEntry.feito,
+        quantity: legacyEntry.quantidade ?? (requirement.requiresQuantity ? 0 : undefined),
+        bonusInput: legacyEntry.bonusManual ?? 0,
+        penaltyInput: legacyEntry.penalidadeManual ?? 0,
+        manualScore: 0,
+        notes: legacyEntry.observacao || '',
+        basePoints: 0,
+        bonusPoints: 0,
+        penaltyPoints: 0,
+        calculatedPoints: 0,
+        updatedBy: legacyEntry.updatedBy,
+        updatedAt: legacyEntry.updatedAt
+      };
+
+      const breakdown = calculateRequirementBreakdown(requirement, draft);
+      merged[requirement.id] = {
+        ...draft,
+        basePoints: breakdown.basePoints,
+        bonusPoints: breakdown.bonusPoints,
+        penaltyPoints: breakdown.penaltyPoints,
+        calculatedPoints: breakdown.calculatedPoints
+      };
+      changed = true;
+    });
+
+    if (!changed) continue;
+
+    const docId = existingDoc?.id || `${quarterId}__${legacy.unidadeId}`;
+    const totalPoints = Object.values(merged).reduce((sum, current) => sum + Number(current.calculatedPoints || 0), 0);
+
+    await setDoc(doc(db, 'clubs', clubId, 'ranking_progress', docId), deepCleanUndefined({
+      id: docId,
+      quarterId,
+      unitId: legacy.unidadeId,
+      clubeId: clubId,
+      totalPoints,
+      resultados: merged,
+      firstSavedAt: existingDoc?.firstSavedAt || existingDoc?.updatedAt || legacy.updatedAt || serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }), { merge: true });
+  }
+};
+
 export const updateClubaoRequisito = async (
   clubId: string,
   unidadeId: string,
@@ -605,4 +739,106 @@ export const updateClubaoRequisito = async (
     }
   });
   await setDoc(docRef, cleaned, { merge: true });
+};
+
+// --- RANKING TRIMESTRAL ---
+export const listRankingQuarters = async (clubId: string): Promise<RankingQuarter[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(collection(db, 'clubs', clubId, 'ranking_quarters'));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as RankingQuarter));
+  return items.sort((a, b) => a.ordem - b.ordem);
+};
+
+export const updateRankingQuarterStatus = async (
+  clubId: string,
+  quarterId: string,
+  status: RankingQuarter['status']
+) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'ranking_quarters', quarterId), deepCleanUndefined({
+    status,
+    updatedAt: serverTimestamp()
+  }));
+};
+
+export const listRankingRequirements = async (clubId: string, quarterId?: string): Promise<RankingRequirement[]> => {
+  validateClub(clubId);
+  const colRef = collection(db, 'clubs', clubId, 'ranking_requirements');
+  const snap = quarterId
+    ? await getDocs(query(colRef, where('quarterId', '==', quarterId)))
+    : await getDocs(colRef);
+  const items = snap.docs.map(d => ({ id: d.id, active: true, ...d.data() } as RankingRequirement));
+  return items.sort((a, b) => a.displayOrder - b.displayOrder);
+};
+
+export const listRankingProgress = async (clubId: string, quarterId: string): Promise<RankingUnitProgressDoc[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(query(collection(db, 'clubs', clubId, 'ranking_progress'), where('quarterId', '==', quarterId)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as RankingUnitProgressDoc));
+};
+
+export const saveRankingUnitProgress = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  resultados: Record<string, RankingProgressEntry>,
+  updatedBy?: { id: string; nome: string; email?: string; }
+) => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const progressRef = doc(db, 'clubs', clubId, 'ranking_progress', docId);
+  const existingSnap = await getDoc(progressRef);
+  const cleanedResults = Object.entries(resultados).reduce<Record<string, RankingProgressEntry>>((acc, [requirementId, value]) => {
+    acc[requirementId] = deepCleanUndefined({
+      requirementId,
+      completed: !!value.completed,
+      quantity: value.quantity ?? null,
+      bonusInput: value.bonusInput ?? 0,
+      penaltyInput: value.penaltyInput ?? 0,
+      manualScore: value.manualScore ?? 0,
+      notes: value.notes || null,
+      basePoints: value.basePoints ?? 0,
+      bonusPoints: value.bonusPoints ?? 0,
+      penaltyPoints: value.penaltyPoints ?? 0,
+      calculatedPoints: value.calculatedPoints ?? 0,
+      updatedBy,
+      updatedAt: serverTimestamp()
+    });
+    return acc;
+  }, {});
+
+  const totalPoints = Object.values(resultados).reduce((sum, current) => sum + Number(current.calculatedPoints || 0), 0);
+
+  await setDoc(progressRef, deepCleanUndefined({
+    id: docId,
+    quarterId,
+    unitId,
+    clubeId: clubId,
+    totalPoints,
+    resultados: cleanedResults,
+    firstSavedAt: existingSnap.exists() ? existingSnap.data().firstSavedAt || existingSnap.data().updatedAt || serverTimestamp() : serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }), { merge: true });
+};
+
+export const ensureDefaultRanking = async (clubId: string) => {
+  validateClub(clubId);
+  const year = new Date().getFullYear();
+  const metaRef = doc(db, 'clubs', clubId, 'meta', `seed_ranking_${year}`);
+  if ((await getDoc(metaRef)).exists()) return;
+
+  const batch = writeBatch(db);
+  const quarters = buildDefaultRankingQuarters(year);
+  const requirements = buildDefaultRankingRequirements(year);
+
+  quarters.forEach(quarter => {
+    batch.set(doc(db, 'clubs', clubId, 'ranking_quarters', quarter.id), quarter, { merge: true });
+  });
+
+  requirements.forEach(requirement => {
+    batch.set(doc(db, 'clubs', clubId, 'ranking_requirements', requirement.id), requirement, { merge: true });
+  });
+
+  batch.set(metaRef, { done: true, year, createdAt: serverTimestamp() });
+  await batch.commit();
 };

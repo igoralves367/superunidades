@@ -44,6 +44,7 @@ export enum CargoDesbravador {
 export interface Clube {
   id: string;
   nome: string;
+  publicSlug?: string;
 }
 
 export interface MemberInstructorSpecialty {
@@ -221,7 +222,6 @@ export interface ClubaoRegistro {
   feito: boolean;
   quantidade?: number;
   observacao?: string;
-  evidencias?: string[];
   updatedAt?: any;
   updatedBy?: { id: string; nome: string; email?: string; };
   bonusManual?: number;
@@ -233,5 +233,89 @@ export interface ClubaoUnidadeDoc {
   unidadeId: string;
   clubeId: string;
   resultados: Record<string, ClubaoRegistro>;
+  updatedAt?: any;
+}
+
+// --- RANKING TRIMESTRAL ---
+export type RankingQuarterStatus = 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+export type RankingRequirementRuleType =
+  | 'BOOLEAN'
+  | 'BOOLEAN_WITH_BONUS'
+  | 'BOOLEAN_WITH_PENALTY'
+  | 'QUANTITY'
+  | 'QUANTITY_WITH_PENALTY'
+  | 'RECURRING'
+  | 'MANUAL_SCORE';
+
+export type RankingModifierType = 'FIXED' | 'PER_UNIT' | 'MANUAL';
+
+export interface RankingQuarter {
+  id: string;
+  name: string;
+  number: 1 | 2 | 3;
+  year: number;
+  status: RankingQuarterStatus;
+  startsAt?: string;
+  endsAt?: string;
+  ativo: boolean;
+  ordem: number;
+  origem: 'PADRAO' | 'CUSTOM';
+}
+
+export interface RankingRequirementSeed {
+  id: string;
+  quarterNumber: 1 | 2 | 3;
+  category: string;
+  name: string;
+  description: string;
+  points: number;
+  ruleType: RankingRequirementRuleType;
+  requiresQuantity: boolean;
+  quantityLabel: string | null;
+  pointsPerUnit: number | null;
+  maxQuantity: number | null;
+  allowBonus: boolean;
+  bonusType: RankingModifierType | null;
+  bonusValue: number | null;
+  bonusDescription: string | null;
+  allowPenalty: boolean;
+  penaltyType: RankingModifierType | null;
+  penaltyValue: number | null;
+  penaltyDescription: string | null;
+  maxManualScore: number | null;
+  displayOrder: number;
+  active: boolean;
+}
+
+export interface RankingRequirement extends Omit<RankingRequirementSeed, 'quarterNumber'> {
+  quarterId: string;
+  active: boolean;
+  origem: 'PADRAO' | 'CUSTOM';
+}
+
+export interface RankingProgressEntry {
+  requirementId: string;
+  completed: boolean;
+  quantity?: number;
+  bonusInput?: number;
+  penaltyInput?: number;
+  manualScore?: number;
+  notes?: string;
+  basePoints: number;
+  bonusPoints: number;
+  penaltyPoints: number;
+  calculatedPoints: number;
+  updatedAt?: any;
+  updatedBy?: { id: string; nome: string; email?: string; };
+}
+
+export interface RankingUnitProgressDoc {
+  id: string;
+  quarterId: string;
+  unitId: string;
+  clubeId: string;
+  totalPoints: number;
+  resultados: Record<string, RankingProgressEntry>;
+  firstSavedAt?: any;
   updatedAt?: any;
 }

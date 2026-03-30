@@ -3,13 +3,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+// Use variáveis de ambiente para não deixar credenciais no repositório público.
+// No Vercel (ou .env.local) defina VITE_FIREBASE_* de acordo com o seu projeto.
 const firebaseConfig = {
-  apiKey: "AIzaSyBNCcQiP69snZbIoYLTN71M55ljC_Q6yq4",
-  authDomain: "desbravahub-35316.firebaseapp.com",
-  projectId: "desbravahub-35316",
-  storageBucket: "desbravahub-35316.firebasestorage.app",
-  messagingSenderId: "908455363227",
-  appId: "1:908455363227:web:fde86381c039c9c096fc3e"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);

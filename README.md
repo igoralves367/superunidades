@@ -1,20 +1,43 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Desbrava Clube
+Central web para gestão de clubes de Desbravadores (secretaria, classes, financeiro, clubão de unidades) com Firebase + React (Vite).
 
-# Run and deploy your AI Studio app
+## Requisitos
+- Node.js 18+  
+- Conta Firebase com Firestore e Auth habilitados
+- Vercel (opcional para deploy)
 
-This contains everything you need to run your app locally.
+## Configuração
+1) Copie `.env.example` para `.env.local` e preencha:
+```
+GEMINI_API_KEY=your_gemini_key_here            # se usar features de IA
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+2) Instale dependências  
+`npm install`
 
-View your app in AI Studio: https://ai.studio/apps/drive/1J7O3foczt2Zh6cO_3NigHmZFYM0LuQM2
+3) Rode em desenvolvimento  
+`npm run dev`
 
-## Run Locally
+## Deploy na Vercel
+- Crie um projeto Vercel apontando para este repo.  
+- Adicione as variáveis acima no dashboard da Vercel (`Project Settings` → `Environment Variables`).  
+- Faça redeploy; o build Vite consumirá as variáveis `VITE_*`.
+- Não envie `.env.local` para o GitHub. Use `.env.example` apenas como modelo versionado.
 
-**Prerequisites:**  Node.js
+## Segurança das chaves
+- As chaves Firebase do cliente não são segredos, mas **devem ser restritas** no console do Firebase:  
+  - Auth: limitar domínios autorizados.  
+  - Firestore/Storage: regras de segurança adequadas por usuário/role.  
+  - API key: restringir domínios de origem e apps aceitáveis.  
+- Nunca commitar valores reais em `.env.local`.  
+- Rotacione chaves se já ficaram públicas e confirme que só domínios da Vercel/produção estão permitidos.
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Estrutura rápida
+- `pages/` — telas (Login, Dashboard, Admin, Clubão, etc.)
+- `services/` — integrações (Firestore, storage util)
+- `public/` — assets estáticos (`logo-desbravadores.png`, `unidades/*.png`)

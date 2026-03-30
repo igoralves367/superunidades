@@ -27,28 +27,26 @@ export const LoginView: React.FC<LoginViewProps> = ({ onCreateClubClick }) => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#0B0F1A] p-6 relative overflow-hidden font-inter">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#0B0F1A] px-4 py-6 sm:p-6 relative overflow-hidden font-inter">
       {/* Elementos decorativos de fundo */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#E53935]/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#FFD60A]/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <div className="w-full max-w-sm space-y-8 animate-fade-in relative z-10">
+      <div className="w-full max-w-sm space-y-6 sm:space-y-8 animate-fade-in relative z-10">
         <div className="text-center space-y-4">
-          <div className="w-24 h-24 rounded-[32px] bg-[#0B0F1A] mx-auto flex items-center justify-center shadow-2xl shadow-[#E53935]/40 border-4 border-[#0B0F1A] overflow-hidden">
-            <picture>
-              <source srcSet="/logo-desbravadores.png" type="image/png" />
-              <img src="/logo-desbravadores.svg" alt="Desbravadores" className="w-16 h-16 object-contain" />
-            </picture>
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-[32px] bg-[radial-gradient(circle_at_top,rgba(255,214,10,0.18),rgba(11,15,26,0.96)_70%)] mx-auto flex items-center justify-center shadow-[0_0_40px_rgba(229,57,53,0.25)] border border-[#243047] overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(229,57,53,0.20),transparent_55%)] pointer-events-none" />
+            <img src="/logo.png" alt="Super Unidades" className="relative w-20 h-20 sm:w-24 sm:h-24 object-contain scale-110" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-5xl font-black tracking-tighter text-white">
-              DESBRAVA<span className="text-[#FFD60A]"> CLUBE</span>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tighter text-white leading-none">
+              SUPER<span className="text-[#FFD60A]"> UNIDADES</span>
             </h1>
-            <p className="text-gray-500 font-bold uppercase text-[10px] tracking-[0.4em]">Gestão de Clubes de Desbravadores</p>
+            <p className="text-gray-500 font-bold uppercase text-[10px] tracking-[0.28em] sm:tracking-[0.4em]">Clubão, unidades e ranking</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-[#111827] border border-[#1F2937] rounded-[40px] p-10 space-y-6 shadow-2xl relative">
+        <form onSubmit={handleSubmit} className="bg-[#111827] border border-[#1F2937] rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 space-y-6 shadow-2xl relative">
           {error && (
             <div className="bg-[#B71C1C]/10 border border-[#B71C1C]/30 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top duration-300">
               <AlertCircle size={18} className="text-[#E53935] shrink-0" />
@@ -87,7 +85,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onCreateClubClick }) => {
             disabled={loading}
             className="w-full h-16 bg-[#E53935] hover:bg-[#f44336] disabled:bg-gray-800 disabled:text-gray-600 rounded-2xl text-white font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-[#E53935]/20 flex items-center justify-center gap-2 group active:scale-[0.98]"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : 'Acessar Central'}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : 'Entrar'}
           </button>
         </form>
 
@@ -97,7 +95,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onCreateClubClick }) => {
             onClick={onCreateClubClick}
             className="group inline-flex items-center gap-2 text-gray-500 hover:text-white text-xs font-bold transition-all px-6 py-2 rounded-full hover:bg-white/5"
           >
-            Não tem acesso? <span className="text-[#FFD60A] underline decoration-[#FFD60A]/30">Cadastrar meu Clube</span>
+            Não tem acesso? <span className="text-[#FFD60A] underline decoration-[#FFD60A]/30">Criar acesso</span>
             <Plus size={14} className="group-hover:rotate-90 transition-transform" />
           </button>
         </div>

@@ -4,12 +4,10 @@ import { Sidebar } from './components/Sidebar';
 import { LoginView } from './pages/LoginView';
 import { CreateClubView } from './pages/CreateClubView';
 import { Dashboard } from './pages/Dashboard';
-import { Desbravadores } from './pages/Desbravadores';
-import { Secretaria } from './pages/Secretaria';
-import { Financeiro } from './pages/Financeiro';
-import { Progresso } from './pages/Progresso';
-import { Admin } from './pages/Admin';
 import { Clubao } from './pages/Clubao';
+import { Ranking } from './pages/Ranking';
+import { PublicRanking } from './pages/PublicRanking';
+import { Units } from './pages/Units';
 import { PerfilAcesso } from './types';
 import { Menu, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
@@ -20,34 +18,20 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [restrictionNotice, setRestrictionNotice] = useState<string | null>(null);
   const [view, setView] = useState<'login' | 'register'>('login');
+  const [hashRoute, setHashRoute] = useState(() => window.location.hash || '');
 
   useEffect(() => {
-    // Lógica de Controle de Acesso
-    if (isAuthenticated && activeTab === 'admin' && ![PerfilAcesso.DIRETORIA, PerfilAcesso.INSTRUTOR].includes(currentUser?.perfil as PerfilAcesso)) {
-      setActiveTab('dashboard');
-      setRestrictionNotice('Acesso restrito: Apenas a diretoria e instrutores podem acessar configurações administrativas.');
-      setTimeout(() => setRestrictionNotice(null), 5000);
-    }
-    
-    if (isAuthenticated && activeTab === 'financeiro' && currentUser?.perfil === PerfilAcesso.INSTRUTOR) {
-      setActiveTab('dashboard');
-      setRestrictionNotice('Acesso restrito: Instrutores não possuem permissão para acessar o financeiro.');
-      setTimeout(() => setRestrictionNotice(null), 5000);
-    }
-
-    if (isAuthenticated && activeTab !== 'financeiro' && currentUser?.perfil === PerfilAcesso.FINANCEIRO) {
-      setActiveTab('financeiro');
-      setRestrictionNotice('Acesso restrito: Perfil financeiro acessa apenas o módulo Financeiro.');
-      setTimeout(() => setRestrictionNotice(null), 5000);
-    }
-  }, [activeTab, currentUser, isAuthenticated]);
+    const onHashChange = () => setHashRoute(window.location.hash || '');
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
-      setActiveTab(currentUser?.perfil === PerfilAcesso.FINANCEIRO ? 'financeiro' : 'dashboard');
+      setActiveTab('dashboard');
       setView('login'); // Reseta estado de view caso estivesse em register
     }
-  }, [isAuthenticated, currentUser?.perfil]);
+  }, [isAuthenticated]);
 
   if (isInitializing) {
     return (
@@ -56,6 +40,10 @@ const App: React.FC = () => {
         <p className="text-gray-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Estabelecendo Conexão Cloud...</p>
       </div>
     );
+  }
+
+  if (hashRoute.startsWith('#ranking/') || hashRoute.startsWith('#ranking-publico')) {
+    return <PublicRanking />;
   }
 
   if (!isAuthenticated) {
@@ -68,19 +56,13 @@ const App: React.FC = () => {
     if (!currentUser) return null;
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard user={currentUser} />;
-      case 'desbravadores':
-        return <Desbravadores user={currentUser} />;
-      case 'progresso':
-        return <Progresso user={currentUser} />;
-      case 'secretaria':
-        return <Secretaria user={currentUser} />;
-      case 'financeiro':
-        return <Financeiro user={currentUser} />;
+        return <Dashboard user={currentUser} onNavigate={setActiveTab} />;
+      case 'units':
+        return <Units />;
       case 'clubao':
         return <Clubao user={currentUser} />;
-      case 'admin':
-        return <Admin />;
+      case 'ranking':
+        return <Ranking user={currentUser} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center p-10">
@@ -88,7 +70,7 @@ const App: React.FC = () => {
               ?
             </div>
             <h2 className="text-xl font-bold mb-2 text-white">Módulo em desenvolvimento</h2>
-            <p className="text-gray-400">Esta tela estará disponível em breve no Desbrava Clube.</p>
+            <p className="text-gray-400">Esta tela estará disponível em breve no Super Unidades.</p>
           </div>
         );
     }
@@ -110,7 +92,7 @@ const App: React.FC = () => {
       {/* Sidebar Mobile Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[300] lg:hidden flex">
-          <div className="w-64 h-full animate-in slide-in-from-left duration-300 shadow-2xl relative z-10">
+          <div className="w-[85vw] max-w-[320px] h-full animate-in slide-in-from-left duration-300 shadow-2xl relative z-10">
             <Sidebar 
               perfil={currentUser!.perfil} 
               clubeId={currentUser!.clubeId}
@@ -140,12 +122,12 @@ const App: React.FC = () => {
         )}
 
         {/* Header Mobile */}
-        <header className="lg:hidden flex items-center justify-between p-5 border-b border-[#1F2937] bg-[#0B0F1A] relative z-20">
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-[#1F2937] bg-[#0B0F1A] relative z-20">
           <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center shadow-lg overflow-hidden">
-            <img src="/logo-desbravadores.png" alt="Desbravadores" className="w-6 h-6 object-contain" />
+            <img src="/logo.png" alt="Super Unidades" className="w-6 h-6 object-contain" />
           </div>
-            <span className="font-black tracking-tighter text-xl">DESBRAVA<span className="text-[#FFD60A]"> CLUBE</span></span>
+            <span className="font-black tracking-tighter text-base sm:text-xl">SUPER<span className="text-[#FFD60A]"> UNIDADES</span></span>
           </div>
           <button 
             onClick={() => setIsMobileMenuOpen(true)}
@@ -156,7 +138,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Conteúdo Dinâmico */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10">
+        <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-4 md:p-8 lg:p-10 custom-scrollbar relative z-10">
           <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
             {renderContent()}
           </div>
@@ -170,7 +152,7 @@ const App: React.FC = () => {
               Sessão Ativa: <span className="text-white">{currentUser!.nome}</span> <span className="text-[#E53935] mx-2">|</span> {currentUser!.cargo}
             </span>
           </div>
-          <p className="text-[9px] text-gray-700 font-black uppercase tracking-[0.5em]">Gestão de Clubes de Desbravadores</p>
+          <p className="text-[9px] text-gray-700 font-black uppercase tracking-[0.5em]">Clubão, unidades e ranking</p>
         </footer>
       </div>
     </div>

@@ -35,6 +35,29 @@ const medalStyles = [
   'from-[#F97316] to-[#EA580C] text-white'
 ];
 
+const buildPodiumRows = (ranking: ReturnType<typeof buildRankingRows>) => {
+  const scoredRows = ranking.filter(row => row.total > 0);
+  const podium = [];
+
+  for (let index = 0; index < Math.min(3, scoredRows.length); index += 1) {
+    const row = scoredRows[index];
+    const previousRow = scoredRows[index - 1];
+    const nextRow = scoredRows[index + 1];
+
+    const tiedWithPrevious = previousRow ? previousRow.total === row.total : false;
+    const tiedWithNext = nextRow ? nextRow.total === row.total : false;
+    const isAboveNext = nextRow ? row.total > nextRow.total : true;
+
+    if (tiedWithPrevious || tiedWithNext || !isAboveNext) {
+      break;
+    }
+
+    podium.push(row);
+  }
+
+  return podium;
+};
+
 export const PublicRanking: React.FC = () => {
   const routeValue = getPublicRouteValue();
 
@@ -111,9 +134,8 @@ export const PublicRanking: React.FC = () => {
   }, [routeValue]);
 
   const ranking = useMemo(() => buildRankingRows(units, requirements, progressDocs), [units, requirements, progressDocs]);
-  const scoredRows = useMemo(() => ranking.filter(row => row.total > 0), [ranking]);
-  const leader = currentQuarter?.status === 'CLOSED' && scoredRows.length > 0 ? scoredRows[0] : null;
-  const podium = scoredRows.length >= 3 ? scoredRows.slice(0, 3) : [];
+  const podium = useMemo(() => buildPodiumRows(ranking), [ranking]);
+  const leader = currentQuarter?.status === 'CLOSED' && podium.length > 0 ? podium[0] : null;
   const otherRows = ranking.slice(3);
 
   if (loading) {
@@ -251,7 +273,7 @@ export const PublicRanking: React.FC = () => {
         {podium.length === 0 && (
           <section className="rounded-[28px] sm:rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(11,15,26,0.96))] p-5 sm:p-6 md:p-8 text-center">
             <p className="text-[10px] tracking-[0.35em] uppercase font-black text-gray-500">Pódio indisponível</p>
-            <h2 className="text-2xl md:text-3xl font-black mt-3">O pódio será exibido quando pelo menos 3 unidades tiverem pontuação</h2>
+            <h2 className="text-2xl md:text-3xl font-black mt-3">O pódio só aparece quando houver posições definidas sem empate</h2>
           </section>
         )}
 

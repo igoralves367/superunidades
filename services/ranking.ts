@@ -96,7 +96,7 @@ const calculateBonusPoints = (
   const quantity = normalizeQuantity(requirement, entry);
 
   if (requirement.bonusType === 'FIXED') {
-    return completed || quantity > 0 ? clampNonNegative(requirement.bonusValue) : 0;
+    return clampNonNegative(entry?.bonusInput) > 0 ? clampNonNegative(requirement.bonusValue) : 0;
   }
 
   if (requirement.bonusType === 'PER_UNIT') {

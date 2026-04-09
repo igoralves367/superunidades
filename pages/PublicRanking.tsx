@@ -104,7 +104,6 @@ export const PublicRanking: React.FC = () => {
 
         if (activeQuarter) {
           const fetchedRequirements = await fs.listRankingRequirements(resolvedClubId, activeQuarter.id);
-          await fs.syncLegacyClubaoToRanking(resolvedClubId, activeQuarter.id, fetchedRequirements.filter(requirement => requirement.active));
           const fetchedDocs = await fs.listRankingProgress(resolvedClubId, activeQuarter.id);
 
           if (cancelled) return;

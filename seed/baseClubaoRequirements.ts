@@ -18,6 +18,20 @@ export interface BaseClubaoRequirementSeed {
 
 export const baseClubaoRequirementsSeed: BaseClubaoRequirementSeed[] = [
   {
+    id: 'q1_bas_desbravador_novo_bonus',
+    quarterNumber: 1,
+    topico: 'Requisitos Básicos da Unidade',
+    titulo: 'Bônus por Desbravador Novo',
+    pontos: 100,
+    tipo: 'BONUS',
+    descricao:
+      'Bônus de +100 pontos para cada desbravador novo na unidade.',
+    aplicaQuantidade: true,
+    variavel: true,
+    bonus: true,
+    tags: ['trimestre1', 'basico', 'bonus', 'quantidade']
+  },
+  {
     id: 'q1_sec_planejamento_unidade',
     quarterNumber: 1,
     topico: 'Secretaria e Organização',

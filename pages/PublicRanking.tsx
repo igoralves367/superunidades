@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Crown, Loader2, Medal, Trophy } from 'lucide-react';
+import { Crown, Loader2, Medal, Trophy, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import * as fs from '../services/firestoreDb';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
 import { buildRankingRows } from '../services/ranking';
@@ -62,6 +62,7 @@ export const PublicRanking: React.FC = () => {
   const routeValue = getPublicRouteValue();
 
   const [loading, setLoading] = useState(true);
+  const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
   const [clubId, setClubId] = useState('');
   const [units, setUnits] = useState<Unidade[]>([]);
   const [currentQuarter, setCurrentQuarter] = useState<RankingQuarter | null>(null);
@@ -292,7 +293,8 @@ export const PublicRanking: React.FC = () => {
             {ranking.map((row, index) => (
               <article
                 key={row.unidade.id}
-                className={`rounded-[28px] border p-4 md:p-5 transition-all ${
+                onClick={() => setExpandedUnitId(expandedUnitId === row.unidade.id ? null : row.unidade.id)}
+                className={`rounded-[28px] border p-4 md:p-5 transition-all cursor-pointer hover:border-white/30 ${
                   index === 0
                     ? 'border-[#FFD60A]/20 bg-[linear-gradient(90deg,rgba(255,214,10,0.08),rgba(17,24,39,0.96))]'
                     : 'border-white/10 bg-[#0B0F1A]/80'
@@ -323,6 +325,9 @@ export const PublicRanking: React.FC = () => {
                       <p className="text-[10px] tracking-[0.2em] uppercase font-black text-gray-500">Total</p>
                       <p className="text-2xl font-black mt-1">{row.total}</p>
                     </div>
+                    <div className="flex items-center justify-center p-3 text-gray-400 hover:text-white transition-colors bg-black/20 rounded-2xl border border-white/5">
+                      {expandedUnitId === row.unidade.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </div>
                   </div>
                 </div>
 
@@ -338,6 +343,36 @@ export const PublicRanking: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {expandedUnitId === row.unidade.id && (
+                  <div className="mt-5 pt-5 border-t border-white/10 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-4">Requisitos Pontuados</h4>
+                    <div className="space-y-2">
+                      {requirements.map(req => {
+                        const progress = progressDocs.find(d => d.unitId === row.unidade.id);
+                        const result = progress?.resultados?.[req.id];
+                        const points = result ? (result.calculatedPoints || 0) : 0;
+                        if (points <= 0) return null;
+                        
+                        return (
+                          <div key={req.id} className="flex items-center justify-between bg-black/20 rounded-xl p-3 border border-white/5 hover:bg-white/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <CheckCircle2 size={16} className="text-[#00F5A0] shrink-0" />
+                              <span className="text-sm font-medium text-gray-300">{req.name}</span>
+                            </div>
+                            <span className="text-sm font-black text-[#FFD60A] shrink-0 ml-3">+{points}</span>
+                          </div>
+                        );
+                      })}
+                      {(!progressDocs.find(d => d.unitId === row.unidade.id)?.resultados || 
+                        !requirements.some(req => (progressDocs.find(d => d.unitId === row.unidade.id)?.resultados?.[req.id]?.calculatedPoints || 0) > 0)) && (
+                        <p className="text-sm text-gray-500 italic text-center py-4 bg-black/20 rounded-xl border border-white/5">
+                          Nenhum requisito pontuado.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </article>
             ))}
 

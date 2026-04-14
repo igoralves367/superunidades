@@ -34,7 +34,13 @@ import {
   RankingQuarter,
   RankingRequirement,
   RankingProgressEntry,
-  RankingUnitProgressDoc
+  RankingUnitProgressDoc,
+  RankingUnitProgressDoc,
+  EventoCampori,
+  CampanhaVenda,
+  VendaItem,
+  Reuniao,
+  ReuniaoPresenca
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -282,7 +288,16 @@ export const resolveDuplicateCargos = async (clubId: string) => {
 };
 
 // --- CLASSES ---
-export const listClasses = (clubId: string) => listCol(clubId, 'classes') as Promise<Classe[]>;
+export const listClasses = async (clubId: string): Promise<Classe[]> => {
+  const items = await listCol(clubId, 'classes') as Classe[];
+  return items.map(c => {
+    // Corrige a cor da classe líder para clubes antigos (retrocompatibilidade)
+    if (c.id === 'classe_lider' && (c.corHex === '#FBBF24' || c.corHex === '#FFD60A')) {
+      return { ...c, corHex: 'linear-gradient(135deg, #111827 50%, #FFD60A 50%)' };
+    }
+    return c;
+  });
+};
 export const createClasse = (clubId: string, payload: any) => {
   validateClub(clubId);
   const docRef = doc(collection(db, 'clubs', clubId, 'classes'));
@@ -443,7 +458,7 @@ export const ensureDefaultClasses = async (clubId: string) => {
     { id: 'classe_pioneiro', nome: 'Pioneiro', ordem: 4, corHex: '#9CA3AF', categoria: 'NORMAL' },
     { id: 'classe_excursionista', nome: 'Excursionista', ordem: 5, corHex: '#A855F7', categoria: 'NORMAL' },
     { id: 'classe_guia', nome: 'Guia', ordem: 6, corHex: '#FFD60A', categoria: 'NORMAL' },
-    { id: 'classe_lider', nome: 'Líder', ordem: 7, corHex: '#FBBF24', categoria: 'NORMAL' },
+    { id: 'classe_lider', nome: 'Líder', ordem: 7, corHex: 'linear-gradient(135deg, #111827 50%, #FFD60A 50%)', categoria: 'NORMAL' },
     { id: 'classe_agrupadas', nome: 'Agrupadas', ordem: 99, corHex: '#374151', categoria: 'AGRUPADA' },
   ];
   defaults.forEach(c => batch.set(doc(db, 'clubs', clubId, 'classes', c.id), { ...c, ativo: true, origem: 'PADRAO', locked: true }, { merge: true }));
@@ -841,4 +856,130 @@ export const ensureDefaultRanking = async (clubId: string) => {
 
   batch.set(metaRef, { done: true, year, createdAt: serverTimestamp() });
   await batch.commit();
+};
+
+// --- EVENTO CAMPORI ---
+export const listEventosCampori = (clubId: string): Promise<EventoCampori[]> => listSimpleCol<EventoCampori>(clubId, 'campori_eventos');
+export const createEventoCampori = async (clubId: string, payload: Omit<EventoCampori, 'id' | 'clubeId'>) => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'campori_eventos'));
+  const cleaned = deepCleanUndefined({ ...payload, id: docRef.id, clubeId: clubId, createdAt: serverTimestamp() });
+  await setDoc(docRef, cleaned);
+  return cleaned as EventoCampori;
+};
+export const updateEventoCampori = async (clubId: string, id: string, payload: Partial<EventoCampori>) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'campori_eventos', id), deepCleanUndefined({ ...payload, updatedAt: serverTimestamp() }));
+};
+export const deleteEventoCampori = async (clubId: string, id: string) => {
+  validateClub(clubId);
+  await deleteDoc(doc(db, 'clubs', clubId, 'campori_eventos', id));
+};
+
+// --- CAMPANHAS DE VENDAS ---
+export const listCampanhasVenda = (clubId: string): Promise<CampanhaVenda[]> => listSimpleCol<CampanhaVenda>(clubId, 'campanhas_venda');
+export const createCampanhaVenda = async (clubId: string, payload: Omit<CampanhaVenda, 'id' | 'clubeId'>) => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'campanhas_venda'));
+  const cleaned = deepCleanUndefined({ ...payload, id: docRef.id, clubeId: clubId, createdAt: serverTimestamp() });
+  await setDoc(docRef, cleaned);
+  return cleaned as CampanhaVenda;
+};
+export const updateCampanhaVenda = async (clubId: string, id: string, payload: Partial<CampanhaVenda>) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'campanhas_venda', id), deepCleanUndefined({ ...payload, updatedAt: serverTimestamp() }));
+};
+export const deleteCampanhaVenda = async (clubId: string, id: string) => {
+  validateClub(clubId);
+  await deleteDoc(doc(db, 'clubs', clubId, 'campanhas_venda', id));
+};
+
+// --- ITENS DE VENDA ---
+export const listVendaItems = (clubId: string, campanhaId?: string): Promise<VendaItem[]> => {
+  validateClub(clubId);
+  const colRef = collection(db, 'clubs', clubId, 'venda_items');
+  if (campanhaId) {
+    return getDocs(query(colRef, where('campanhaId', '==', campanhaId)))
+      .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() } as VendaItem)));
+  }
+  return listSimpleCol<VendaItem>(clubId, 'venda_items');
+};
+export const createVendaItem = async (clubId: string, payload: Omit<VendaItem, 'id' | 'clubeId'>) => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'venda_items'));
+  const cleaned = deepCleanUndefined({ ...payload, id: docRef.id, clubeId: clubId, createdAt: serverTimestamp() });
+  await setDoc(docRef, cleaned);
+  return cleaned as VendaItem;
+};
+export const updateVendaItem = async (clubId: string, id: string, payload: Partial<VendaItem>) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'venda_items', id), deepCleanUndefined({ ...payload, updatedAt: serverTimestamp() }));
+};
+export const deleteVendaItem = async (clubId: string, id: string) => {
+  validateClub(clubId);
+  await deleteDoc(doc(db, 'clubs', clubId, 'venda_items', id));
+};
+
+// --- REUNIÕES ---
+export const listReunioes = async (clubId: string): Promise<Reuniao[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(collection(db, 'clubs', clubId, 'reunioes'));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reuniao));
+  return items.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+};
+
+export const createReuniao = async (clubId: string, payload: Omit<Reuniao, 'id' | 'clubeId'>) => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'reunioes'));
+  const cleaned = deepCleanUndefined({ ...payload, id: docRef.id, clubeId: clubId, ativo: true, createdAt: serverTimestamp() });
+  await setDoc(docRef, cleaned);
+  return cleaned as Reuniao;
+};
+
+export const updateReuniao = async (clubId: string, id: string, payload: Partial<Reuniao>) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'reunioes', id), deepCleanUndefined({ ...payload, updatedAt: serverTimestamp() }));
+};
+
+export const deleteReuniao = async (clubId: string, id: string) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'reunioes', id), { ativo: false });
+};
+
+// --- PRESENÇAS EM REUNIÃO ---
+export const listPresencas = async (clubId: string, reuniaoId: string): Promise<ReuniaoPresenca[]> => {
+  validateClub(clubId);
+  const q = query(collection(db, 'clubs', clubId, 'reunioes_presencas'), where('reuniaoId', '==', reuniaoId));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as ReuniaoPresenca));
+};
+
+export const listPresencasPorTrimestre = async (clubId: string, trimestre: number): Promise<ReuniaoPresenca[]> => {
+  // Para filtrar no lado cliente ou buscar agrupado: primeiro pegar reuniões, depois a presença
+  validateClub(clubId);
+  const reus = await listReunioes(clubId);
+  const filterIds = reus.filter(r => r.trimestre === trimestre && r.ativo).map(r => r.id);
+  
+  if (filterIds.length === 0) return [];
+  
+  // Como 'in' do Firestore suporta no maixmo 10 items e podemos ter muitas reuniões, vamos trazer todas do clube (na real seria bom filtrar por data ou trimestre, mas como é MVP, vamos trazer e parsear ou iterar em promises)
+  const allPresencas = await listSimpleCol<ReuniaoPresenca>(clubId, 'reunioes_presencas');
+  return allPresencas.filter(p => filterIds.includes(p.reuniaoId));
+};
+
+export const updatePresenca = async (clubId: string, reuniaoId: string, payload: Omit<ReuniaoPresenca, 'id' | 'clubeId' | 'updatedAt'>) => {
+  validateClub(clubId);
+  // O ID da presenca pode ser algo que garanta unicidade 1:1 ex: reuniaoId__dbvId
+  const docId = `${reuniaoId}_${payload.desbravadorId}`;
+  const docRef = doc(db, 'clubs', clubId, 'reunioes_presencas', docId);
+  
+  const cleaned = deepCleanUndefined({
+    ...payload,
+    id: docId,
+    clubeId: clubId,
+    reuniaoId,
+    updatedAt: serverTimestamp()
+  });
+  
+  await setDoc(docRef, cleaned, { merge: true });
 };

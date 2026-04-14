@@ -98,7 +98,8 @@ export interface Desbravador {
   id: string;
   nome: string;
   unidadeId: string; // Unidade principal para exibição
-  classeId: string;  // Classe regular
+  classeId: string;  // Classe regular (principal)
+  classeIds?: string[]; // Suporte para múltiplas classes (histórico ou simultâneas)
   clubeId: string;
   dataNascimento: string;
   status: 'ATIVO' | 'INATIVO';
@@ -150,11 +151,22 @@ export interface SecretariaStatus {
   observacao?: string;
 }
 
+export interface EventoCampori {
+  id: string;
+  clubeId: string;
+  nome: string;
+  dataInicio: string;
+  dataTermino?: string;
+  valorPadrao: number;
+  ativo: boolean;
+}
+
 export interface CarneCampori {
   id: string;
   clubeId: string;
+  eventoCamporiId?: string;
   desbravadorId: string;
-  titulo: string;
+  titulo?: string;
   valorTotal: number;
   qtdParcelas: number;
   status: 'EM_ANDAMENTO' | 'CONCLUIDO' | 'ATRASADO';
@@ -172,9 +184,33 @@ export interface Parcela {
   dataPagamento?: string;
 }
 
-export interface Despesa { id: string; clubeId: string; valor: number; descricao: string; data: string; categoria?: string; unidadeId?: string; }
+export interface Despesa { id: string; clubeId: string; valor: number; descricao: string; data: string; categoria?: string; unidadeId?: string; campanhaId?: string; }
 export interface Doacao { id: string; clubeId: string; valor: number; doador: string; data: string; socioId?: string; referenciaMes?: string; tipo?: string; observacao?: string; unidadeId?: string; }
-export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; }
+export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; indicadoPorMembroId?: string; }
+
+export interface CampanhaVenda {
+  id: string;
+  clubeId: string;
+  nome: string;
+  dataInicio: string;
+  ativo: boolean;
+  custoTotal: number;
+  quantidadeRendimento: number;
+  valorUnidadeVenda: number;
+  unidadeId?: string;
+}
+
+export interface VendaItem {
+  id: string;
+  campanhaId: string;
+  clubeId: string;
+  quantidadeVendida: number;
+  valorTotal: number;
+  dataVenda: string;
+  vendidoPorMembroId?: string;
+  unidadeId?: string;
+  observacao?: string;
+}
 
 export interface LancamentoCaixa {
   id: string;
@@ -317,5 +353,27 @@ export interface RankingUnitProgressDoc {
   totalPoints: number;
   resultados: Record<string, RankingProgressEntry>;
   firstSavedAt?: any;
+  updatedAt?: any;
+}
+
+// --- REUNIÃO E CHAMADA (PRESENÇA) ---
+export interface Reuniao {
+  id: string;
+  clubeId: string;
+  titulo?: string;
+  data: string; // YYYY-MM-DD
+  trimestre?: 1 | 2 | 3 | 4; // Referência trimestral manual ou baseada no RankingQuarter
+  ativo: boolean;
+  createdAt?: any;
+}
+
+export interface ReuniaoPresenca {
+  id: string; // dbvId (para ser 1 pra 1 e atualizar melhor e evitar overlap)
+  reuniaoId: string;
+  clubeId: string;
+  desbravadorId: string;
+  unidadeId: string;
+  presente: boolean;
+  justificativa?: string;
   updatedAt?: any;
 }

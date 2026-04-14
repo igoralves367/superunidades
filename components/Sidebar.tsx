@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Flag, LayoutDashboard, LogOut, Target, Trophy
+  Flag, LayoutDashboard, LogOut, Target, Trophy, Users, DollarSign, CalendarClock
 } from 'lucide-react';
 import { PerfilAcesso } from '../types';
 
@@ -17,6 +17,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTa
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO, PerfilAcesso.INSTRUTOR] },
     { id: 'units', label: 'Unidades', icon: Flag, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
+    { id: 'membros', label: 'Membros', icon: Users, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
+    { id: 'reunioes', label: 'Reuniões', icon: CalendarClock, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
+    { id: 'financeiro', label: 'Financeiro', icon: DollarSign, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.FINANCEIRO] },
     { id: 'clubao', label: 'Clubão', icon: Target, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
     { id: 'ranking', label: 'Ranking', icon: Trophy, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
   ];

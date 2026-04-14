@@ -8,6 +8,10 @@ import { Clubao } from './pages/Clubao';
 import { Ranking } from './pages/Ranking';
 import { PublicRanking } from './pages/PublicRanking';
 import { Units } from './pages/Units';
+import { Membros } from './pages/Membros';
+import { Financeiro } from './pages/Financeiro';
+import { Reunioes } from './pages/Reunioes';
+import { PublicChamada } from './pages/PublicChamada';
 import { PerfilAcesso } from './types';
 import { Menu, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
@@ -46,6 +50,10 @@ const App: React.FC = () => {
     return <PublicRanking />;
   }
 
+  if (hashRoute.startsWith('#chamada/')) {
+    return <PublicChamada />;
+  }
+
   if (!isAuthenticated) {
     return view === 'login' 
       ? <LoginView onCreateClubClick={() => setView('register')} /> 
@@ -59,10 +67,16 @@ const App: React.FC = () => {
         return <Dashboard user={currentUser} onNavigate={setActiveTab} />;
       case 'units':
         return <Units />;
+      case 'membros':
+        return <Membros user={currentUser} />;
+      case 'financeiro':
+        return <Financeiro user={currentUser} />;
       case 'clubao':
         return <Clubao user={currentUser} />;
       case 'ranking':
         return <Ranking user={currentUser} />;
+      case 'reunioes':
+        return <Reunioes user={currentUser} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center p-10">

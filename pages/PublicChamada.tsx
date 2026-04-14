@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, CalendarClock, ChevronDown, ChevronUp, UserX, UserCheck } from 'lucide-react';
+import { Loader2, CalendarClock, ChevronDown, ChevronUp, UserX, UserCheck, ArrowLeft } from 'lucide-react';
 import { Unidade, Desbravador, Cargo, Classe, Reuniao, ReuniaoPresenca } from '../types';
 import * as fs from '../services/firestoreDb';
 import { formatarCargo } from './Membros';
@@ -21,6 +21,7 @@ export const PublicChamada: React.FC = () => {
 
   const [trimestre, setTrimestre] = useState<number>(1);
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
+  const [selectedReuniaoId, setSelectedReuniaoId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -156,7 +157,8 @@ export const PublicChamada: React.FC = () => {
     );
   }
 
-  const reunioesTrimestre = reunioes.filter(r => r.trimestre === trimestre);
+  const reunioesTrimestre = reunioes.filter(r => r.trimestre === trimestre).sort((a, b) => a.data.localeCompare(b.data));
+  const unidadesOrdenadas = [...unidades].sort((a, b) => a.nome.localeCompare(b.nome));
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(229,57,53,0.12),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(255,214,10,0.08),_transparent_28%),linear-gradient(180deg,#050816_0%,#0B0F1A_100%)] text-gray-100 overflow-hidden font-inter">
@@ -186,116 +188,151 @@ export const PublicChamada: React.FC = () => {
           </div>
         </header>
 
-      <main className="max-w-4xl mx-auto space-y-4 relative z-10">
-        {reunioesTrimestre.length === 0 ? (
-          <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
-            <p className="text-gray-400 font-bold">Nenhuma reunião lançada para este trimestre.</p>
+      <main className="max-w-4xl mx-auto relative z-10">
+        {!selectedReuniaoId ? (
+          <div className="space-y-6">
+            <h2 className="text-xl font-black text-white/90 border-b border-white/10 pb-3 uppercase tracking-widest pl-2">Selecione a Data ou Reunião</h2>
+            {reunioesTrimestre.length === 0 ? (
+              <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
+                <p className="text-gray-400 font-bold">Nenhuma reunião lançada para este trimestre.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {reunioesTrimestre.map(reu => (
+                  <button 
+                    key={reu.id} 
+                    onClick={() => { setSelectedReuniaoId(reu.id); setExpandedUnitId(null); }}
+                    className="bg-[linear-gradient(135deg,rgba(255,255,255,0.03),transparent)] border border-white/10 rounded-3xl p-6 flex flex-col items-start gap-2 hover:border-[#E53935]/50 hover:bg-[#E53935]/5 transition-all text-left shadow-lg group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-bl-full -z-10 group-hover:bg-[#E53935]/10 group-hover:scale-125 transition-transform duration-500"></div>
+                    <div className="flex items-center gap-2 text-[#E53935] font-black tracking-widest text-[10px] sm:text-xs uppercase bg-[#E53935]/10 px-3 py-1.5 rounded-lg border border-[#E53935]/20">
+                      <CalendarClock size={16} /> {reu.data.split('-').reverse().join('/')}
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight mt-1">{reu.titulo || 'Evento Oficial'}</h2>
+                    <div className="text-gray-400 font-bold text-[10px] mt-4 uppercase tracking-widest flex items-center gap-2 group-hover:text-white transition-colors">
+                      Toque para abrir lista de chamada <ChevronDown size={14} className="-rotate-90" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
-          unidades.map(unidade => {
-            const isExpanded = expandedUnitId === unidade.id;
-            const membrosUnidade = membros.filter(m => m.unidadeId === unidade.id);
-
-            return (
-              <div key={unidade.id} className="bg-[#111827] border border-[#1F2937] rounded-2xl overflow-hidden transition-all duration-300">
-                {/* Cabecalho da Unidade */}
-                <button 
-                  onClick={() => setExpandedUnitId(isExpanded ? null : unidade.id)}
-                  className="w-full flex items-center justify-between p-4 bg-[#111827] hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center overflow-hidden shrink-0">
-                      {unidade.imageUrl ? <img src={unidade.imageUrl} alt={unidade.nome} className="w-full h-full object-cover" /> : null}
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-lg font-black text-white">{unidade.nome}</h3>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{membrosUnidade.length} Membros</p>
-                    </div>
+          <div className="space-y-6">
+            {(() => {
+              const reuniaoAtiva = reunioes.find(r => r.id === selectedReuniaoId);
+              return (
+                <div className="flex items-center gap-4 bg-[linear-gradient(135deg,rgba(255,255,255,0.03),transparent)] border border-white/10 rounded-3xl p-4 sm:p-6 mb-8 shadow-lg">
+                  <button 
+                    onClick={() => setSelectedReuniaoId(null)} 
+                    className="shrink-0 flex items-center justify-center w-12 h-12 bg-[#111827] rounded-xl hover:bg-gray-800 border border-[#1F2937] text-gray-300 hover:text-white transition-colors"
+                  >
+                    <ArrowLeft size={24} />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] sm:text-xs font-black text-[#E53935] uppercase tracking-widest">{reuniaoAtiva?.data.split('-').reverse().join('/')}</p>
+                    <h2 className="text-xl sm:text-2xl font-black text-white truncate leading-tight">{reuniaoAtiva?.titulo || 'Evento'}</h2>
                   </div>
-                  <div className="text-gray-500">
-                    {isExpanded ? <ChevronUp /> : <ChevronDown />}
-                  </div>
-                </button>
+                </div>
+              );
+            })()}
 
-                {/* Lista de Membros Expandida */}
-                {isExpanded && (
-                  <div className="p-4 border-t border-[#1F2937] space-y-4 bg-[#0B0F1A]/50">
-                    {membrosUnidade.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4">Sem desbravadores.</p>
-                    ) : (
-                      membrosUnidade.map(membro => {
-                        const mClasses = (membro.classeIds || [membro.classeId]).filter(Boolean).map(cid => classes.find(c => c.id === cid));
-                        const mCargos = membro.cargos?.map(mc => cargos.find(c => c.id === mc.cargoId)?.nome).filter(Boolean).map(n => formatarCargo(n as string, unidade.tipo)).join(', ');
+            <div className="space-y-4">
+              {unidadesOrdenadas.map(unidade => {
+                const isExpanded = expandedUnitId === unidade.id;
+                const membrosUnidade = membros.filter(m => m.unidadeId === unidade.id);
 
-                        return (
-                          <div key={membro.id} className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-4 bg-[#111827] rounded-2xl border border-[#1F2937]">
-                            <div className="flex flex-col gap-1">
-                              <h4 className="font-bold text-white text-base truncate flex items-center gap-2">
-                                {membro.nome}
-                              </h4>
-                              
-                              <div className="flex items-center gap-2 flex-wrap mt-1">
-                                {mClasses.map((cl, idx) => cl && (
-                                  <span key={idx} className="text-[9px] px-2 py-0.5 rounded-full font-black text-white/90 border border-white/20 whitespace-nowrap" style={{ background: cl.corHex }}>
-                                    {cl.nome}
-                                  </span>
-                                ))}
+                return (
+                  <div key={unidade.id} className="bg-[#111827] border border-[#1F2937] rounded-3xl overflow-hidden transition-all duration-300 shadow-xl">
+                    <button 
+                      onClick={() => setExpandedUnitId(isExpanded ? null : unidade.id)}
+                      className="w-full flex items-center justify-between p-4 sm:p-5 bg-[#111827] hover:bg-gray-800 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                          {unidade.imageUrl ? <img src={unidade.imageUrl} alt={unidade.nome} className="w-full h-full object-cover" /> : null}
+                        </div>
+                        <div className="text-left">
+                          <h3 className="text-xl font-black text-white">{unidade.nome}</h3>
+                          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{membrosUnidade.length} Membros</p>
+                        </div>
+                      </div>
+                      <div className="text-gray-500 mr-2 bg-[#0B0F1A] p-2 rounded-xl border border-[#1F2937]">
+                        {isExpanded ? <ChevronUp /> : <ChevronDown />}
+                      </div>
+                    </button>
 
-                                {mCargos && (
-                                  <span className="text-[9px] px-2 py-0.5 rounded text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/20">
-                                    {mCargos}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                    {isExpanded && (
+                      <div className="p-4 border-t border-[#1F2937] space-y-3 bg-[#0B0F1A]/80">
+                        {membrosUnidade.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center font-bold py-6">Nenhum membro cadastrado nesta unidade.</p>
+                        ) : (
+                          membrosUnidade.map(membro => {
+                            const mClasses = (membro.classeIds || [membro.classeId]).filter(Boolean).map(cid => classes.find(c => c.id === cid));
+                            const mCargos = membro.cargos?.map(mc => cargos.find(c => c.id === mc.cargoId)?.nome).filter(Boolean).map(n => formatarCargo(n as string, unidade.tipo)).join(', ');
 
-                            {/* Checkboxes de Reunioes horizontal scroll */}
-                            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar xl:pb-0 shrink-0">
-                                {reunioesTrimestre.map(reu => {
-                                  const presenca = presencas.find(p => p.reuniaoId === reu.id && p.desbravadorId === membro.id);
-                                  const isRegistrado = !!presenca;
-                                  const isPresente = presenca?.presente === true;
+                            const presenca = presencas.find(p => p.reuniaoId === selectedReuniaoId && p.desbravadorId === membro.id);
+                            const isRegistrado = !!presenca;
+                            const isPresente = presenca?.presente === true;
+
+                            const cardBgClass = !isRegistrado 
+                              ? 'bg-[#111827] border-[#1F2937] text-gray-500 hover:border-gray-600 hover:bg-[#00F5A0]/5' 
+                              : isPresente
+                                ? 'bg-[linear-gradient(135deg,rgba(0,245,160,0.1),transparent)] border-[#00F5A0]/50 shadow-[0_0_20px_rgba(0,245,160,0.2)]'
+                                : 'bg-[linear-gradient(135deg,rgba(229,57,53,0.1),transparent)] border-[#E53935]/50 shadow-[0_0_20px_rgba(229,57,53,0.2)]';
+
+                            return (
+                              <div key={membro.id} className="flex items-center justify-between gap-4 p-3 bg-[#111827] rounded-2xl border border-[#1F2937]/50">
+                                <div className="flex flex-col gap-1.5 overflow-hidden pl-2">
+                                  <h4 className="font-black text-white sm:text-lg truncate tracking-tight">
+                                    {membro.nome}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {mClasses.map((cl, idx) => cl && (
+                                      <span key={idx} className="text-[9px] px-2 py-0.5 rounded flex items-center font-black text-white/90 border border-white/10 uppercase tracking-widest whitespace-nowrap shadow-sm" style={{ background: cl.corHex }}>
+                                        {cl.nome}
+                                      </span>
+                                    ))}
+                                    {mCargos && (
+                                      <span className="text-[9px] px-2 py-0.5 rounded flex items-center font-black text-[#FFD60A] bg-[#FFD60A]/10 border border-[#FFD60A]/20 uppercase tracking-widest whitespace-nowrap shadow-sm">
+                                        {mCargos}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <button
+                                  onClick={() => togglePresenca(selectedReuniaoId!, membro.id, unidade.id)}
+                                  className={`relative flex flex-col items-center justify-center p-2 rounded-[16px] min-w-[70px] sm:min-w-[90px] h-14 sm:h-16 border transition-all duration-300 shrink-0 ${cardBgClass}`}
+                                >
+                                  {!isRegistrado ? (
+                                    <>
+                                      <span className="font-black text-[9px] sm:text-[10px] uppercase tracking-widest text-gray-500 mb-1">Pendente</span>
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
+                                    </>
+                                  ) : isPresente ? (
+                                    <UserCheck size={26} className="text-[#00F5A0] drop-shadow-[0_0_8px_rgba(0,245,160,0.5)]" />
+                                  ) : (
+                                    <UserX size={26} className="text-[#E53935] drop-shadow-[0_0_8px_rgba(229,57,53,0.5)]" />
+                                  )}
                                   
-                                  const cardBgClass = !isRegistrado 
-                                    ? 'bg-[#111827] border-white/10 text-gray-500 hover:border-white/30 hover:bg-[#00F5A0]/10 hover:text-[#00F5A0]' 
-                                    : isPresente
-                                      ? 'bg-[linear-gradient(135deg,rgba(0,245,160,0.1),transparent)] border-[#00F5A0]/40 text-[#00F5A0] shadow-[0_0_15px_rgba(0,245,160,0.15)]'
-                                      : 'bg-[linear-gradient(135deg,rgba(229,57,53,0.1),transparent)] border-[#E53935]/40 text-[#E53935] hover:border-[#E53935]/70';
-
-                                  return (
-                                    <button
-                                      key={reu.id}
-                                      onClick={() => togglePresenca(reu.id, membro.id, unidade.id)}
-                                      title={`${reu.data.split('-').reverse().join('/')} - ${reu.titulo}`}
-                                      className={`relative flex items-center justify-between gap-3 p-3 rounded-2xl min-w-[130px] border transition-all duration-300 ${cardBgClass}`}
-                                    >
-                                      <div className="flex flex-col text-left py-0.5">
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${!isRegistrado ? 'opacity-40' : 'opacity-70'}`}>{reu.data.split('-').reverse().slice(0, 2).join('/')}</span>
-                                        <span className={`text-xs font-bold leading-tight line-clamp-1 max-w-[75px] mt-0.5 ${!isRegistrado ? 'opacity-50' : ''}`} title={reu.titulo}>{reu.titulo || 'Reunião'}</span>
-                                      </div>
-                                      
-                                      <div className={`shrink-0 flex items-center justify-center p-2 rounded-xl transition-colors ${!isRegistrado ? 'bg-black/20' : isPresente ? 'bg-[#00F5A0]/20' : 'bg-[#E53935]/20'}`}>
-                                        {!isRegistrado ? <UserX size={18} className="opacity-30" /> : isPresente ? <UserCheck size={18} className="text-[#00F5A0]" /> : <UserX size={18} className="text-[#E53935]" />}
-                                      </div>
-                                      
-                                      {!isPresente && presenca?.justificativa && (
-                                        <span className="absolute -top-2 -right-2 bg-yellow-500 text-black text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border border-neutral-800" title={presenca.justificativa}>
-                                          J
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        );
-                      })
+                                  {!isPresente && presenca?.justificativa && (
+                                    <span className="absolute -top-2 -right-2 bg-[#FFD60A] text-black text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg border-2 border-neutral-900" title={presenca.justificativa}>
+                                      J
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })
+                );
+              })}
+            </div>
+          </div>
         )}
       </main>
       </div>

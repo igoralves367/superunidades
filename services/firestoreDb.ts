@@ -468,9 +468,6 @@ export const ensureDefaultClasses = async (clubId: string) => {
 
 export const ensureDefaultCargos = async (clubId: string) => {
   validateClub(clubId);
-  const metaRef = doc(db, 'clubs', clubId, 'meta', 'seed_cargos');
-  if ((await getDoc(metaRef)).exists()) return;
-  const batch = writeBatch(db);
   const defaults = [
     { id: 'cargo_diretor', nome: 'Diretor(a)', ordem: 1, tipo: 'DIRETORIA', locked: true },
     { id: 'cargo_associado', nome: 'Associado(a)', ordem: 2, tipo: 'DIRETORIA', locked: true },
@@ -482,10 +479,21 @@ export const ensureDefaultCargos = async (clubId: string) => {
     { id: 'cargo_conselheiro', nome: 'Conselheiro(a)', ordem: 8, tipo: 'CONSELHEIRO', locked: true },
     { id: 'cargo_midia', nome: 'Diretor de Mídia', ordem: 9, tipo: 'DIRETORIA', locked: false },
     { id: 'cargo_capitao', nome: 'Capitão/Capitã', ordem: 10, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_desbravador', nome: 'Desbravador', ordem: 11, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_secretario_unidade', nome: 'Secretário(a)', ordem: 11, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_tesoureiro_unidade', nome: 'Tesoureiro(a)', ordem: 12, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_capelao_unidade', nome: 'Capelão', ordem: 13, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_almoxarife', nome: 'Almoxarifado', ordem: 14, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_desbravador', nome: 'Desbravador', ordem: 15, tipo: 'MEMBRO', locked: false },
   ];
-  defaults.forEach(c => batch.set(doc(db, 'clubs', clubId, 'cargos', c.id), { ...c, slug: normalizeSlug(c.nome), dedupeKey: createDedupeKey(c.nome), ativo: true, origem: 'PADRAO' }, { merge: true }));
-  batch.set(metaRef, { done: true });
+
+  const snap = await getDocs(collection(db, 'clubs', clubId, 'cargos'));
+  const currentIds = snap.docs.map(d => d.id);
+  const toAdd = defaults.filter(d => !currentIds.includes(d.id));
+
+  if (toAdd.length === 0) return;
+
+  const batch = writeBatch(db);
+  toAdd.forEach(c => batch.set(doc(db, 'clubs', clubId, 'cargos', c.id), { ...c, slug: normalizeSlug(c.nome), dedupeKey: createDedupeKey(c.nome), ativo: true, origem: 'PADRAO' }, { merge: true }));
   await batch.commit();
 };
 

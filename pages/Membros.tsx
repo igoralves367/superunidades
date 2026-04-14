@@ -7,12 +7,38 @@ import { Modal } from '../components/Modal';
 export const formatarCargo = (nomeCargo: string, tipoUnidade: string | undefined) => {
   if (!tipoUnidade) return nomeCargo;
   const t = tipoUnidade.toUpperCase();
-  if (t === 'MASCULINA') {
-    return nomeCargo.replace('Capitão/Capitã', 'Capitão').replace('Conselheiro(a)', 'Conselheiro').replace('Diretor(a)', 'Diretor').replace('Secretário(a)', 'Secretário').replace('Tesoureiro(a)', 'Tesoureiro').replace('Associado(a)', 'Associado');
+  const lower = nomeCargo.toLowerCase();
+
+  const match = (keys: string[]) => keys.some(k => lower.includes(k));
+
+  if (match(['capitão', 'capitao', 'capitã'])) {
+    return t === 'FEMININA' ? 'Capitã' : 'Capitão';
   }
-  if (t === 'FEMININA') {
-    return nomeCargo.replace('Capitão/Capitã', 'Capitã').replace('Conselheiro(a)', 'Conselheira').replace('Diretor(a)', 'Diretora').replace('Secretário(a)', 'Secretária').replace('Tesoureiro(a)', 'Tesoureira').replace('Associado(a)', 'Associada');
+  if (match(['secretário', 'secretária', 'secretario', 'secretaria'])) {
+    return t === 'FEMININA' ? 'Secretária' : 'Secretário';
   }
+  if (match(['capelão', 'capelao', 'capelã'])) {
+    return t === 'FEMININA' ? 'Capelã' : 'Capelão';
+  }
+  if (match(['tesoureir'])) { // pega tesoureiro(a)
+    return t === 'FEMININA' ? 'Tesoureira' : 'Tesoureiro';
+  }
+  if (match(['conselheir'])) { 
+    return t === 'FEMININA' ? 'Conselheira' : 'Conselheiro';
+  }
+  if (match(['almoxarif'])) {
+    return 'Almoxarifado';
+  }
+  if (match(['desbravador'])) {
+    return t === 'FEMININA' ? 'Desbravadora' : 'Desbravador';
+  }
+  if (match(['diretor'])) {
+    return t === 'FEMININA' ? 'Diretora' : 'Diretor';
+  }
+  if (match(['associad'])) {
+    return t === 'FEMININA' ? 'Associada' : 'Associado';
+  }
+
   return nomeCargo;
 };
 

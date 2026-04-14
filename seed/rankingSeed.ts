@@ -1,5 +1,7 @@
 import { RankingQuarter, RankingRequirement, RankingRequirementSeed } from '../types';
 
+export const RANKING_SEED_VERSION = 2;
+
 export const buildDefaultRankingQuarters = (year: number): RankingQuarter[] => ([
   {
     id: `ranking_q1_${year}`,
@@ -7,8 +9,8 @@ export const buildDefaultRankingQuarters = (year: number): RankingQuarter[] => (
     number: 1,
     year,
     status: 'ACTIVE',
-    startsAt: `${year}-01-01`,
-    endsAt: `${year}-03-31`,
+    startsAt: `${year}-03-01`,
+    endsAt: `${year}-05-31`,
     ativo: true,
     ordem: 1,
     origem: 'PADRAO'
@@ -19,8 +21,8 @@ export const buildDefaultRankingQuarters = (year: number): RankingQuarter[] => (
     number: 2,
     year,
     status: 'CLOSED',
-    startsAt: `${year}-04-01`,
-    endsAt: `${year}-06-30`,
+    startsAt: `${year}-06-01`,
+    endsAt: `${year}-08-31`,
     ativo: true,
     ordem: 2,
     origem: 'PADRAO'
@@ -31,8 +33,8 @@ export const buildDefaultRankingQuarters = (year: number): RankingQuarter[] => (
     number: 3,
     year,
     status: 'ARCHIVED',
-    startsAt: `${year}-07-01`,
-    endsAt: `${year}-09-30`,
+    startsAt: `${year}-09-01`,
+    endsAt: `${year}-11-30`,
     ativo: true,
     ordem: 3,
     origem: 'PADRAO'
@@ -71,17 +73,17 @@ export const rankingRequirementsQuarter1Seed: RankingRequirementSeed[] = [
     category: 'Secretaria e Organização',
     name: 'Unidade completa',
     description:
-      'Unidade com todos os cargos e membros definidos e ativos até o final do trimestre.',
+      'Cada unidade deverá ser composta por 01 Conselheiro(a), 01 Adjunto(a) de Conselheiro(a) e 04 Desbravadores(as) com idade entre 10 e 15 anos. Unidade com todos os cargos e membros definidos e ativos até o final do trimestre.',
     points: 100,
-    ruleType: 'BOOLEAN',
-    requiresQuantity: false,
-    quantityLabel: null,
+    ruleType: 'BOOLEAN_WITH_BONUS',
+    requiresQuantity: true,
+    quantityLabel: 'Quantidade de desbravadores novos na unidade',
     pointsPerUnit: null,
     maxQuantity: null,
-    allowBonus: false,
-    bonusType: null,
-    bonusValue: null,
-    bonusDescription: null,
+    allowBonus: true,
+    bonusType: 'PER_UNIT',
+    bonusValue: 100,
+    bonusDescription: 'Bônus de +100 pontos para cada desbravador novo na unidade.',
     allowPenalty: false,
     penaltyType: null,
     penaltyValue: null,

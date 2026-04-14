@@ -43,7 +43,7 @@ import {
   ReuniaoPresenca
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
-import { buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
+import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
 import { baseUnitsSeed } from '../seed/baseUnits';
 import { calculateRequirementBreakdown } from './ranking';
 
@@ -469,32 +469,43 @@ export const ensureDefaultClasses = async (clubId: string) => {
 export const ensureDefaultCargos = async (clubId: string) => {
   validateClub(clubId);
   const defaults = [
-    { id: 'cargo_diretor', nome: 'Diretor(a)', ordem: 1, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_associado', nome: 'Associado(a)', ordem: 2, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_secretaria', nome: 'Secretário(a)', ordem: 3, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_tesoureiro', nome: 'Tesoureiro(a)', ordem: 4, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_anciao', nome: 'Ancião', ordem: 5, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_capelao', nome: 'Capelão', ordem: 6, tipo: 'DIRETORIA', locked: true },
-    { id: 'cargo_instrutor', nome: 'Instrutor', ordem: 7, tipo: 'INSTRUTOR', locked: true },
-    { id: 'cargo_conselheiro', nome: 'Conselheiro(a)', ordem: 8, tipo: 'CONSELHEIRO', locked: true },
-    { id: 'cargo_midia', nome: 'Diretor de Mídia', ordem: 9, tipo: 'DIRETORIA', locked: false },
-    { id: 'cargo_capitao', nome: 'Capitão/Capitã', ordem: 10, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_secretario_unidade', nome: 'Secretário(a)', ordem: 11, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_tesoureiro_unidade', nome: 'Tesoureiro(a)', ordem: 12, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_capelao_unidade', nome: 'Capelão', ordem: 13, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_almoxarife', nome: 'Almoxarifado', ordem: 14, tipo: 'MEMBRO', locked: false },
-    { id: 'cargo_desbravador', nome: 'Desbravador', ordem: 15, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_diretor', nome: 'Diretor do Clube', ordem: 1, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_associado', nome: 'Dir. Associado', ordem: 2, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_associada', nome: 'Dir. Associada', ordem: 3, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_secretaria', nome: 'Secretário(a)', ordem: 4, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_tesoureiro', nome: 'Tesoureiro(a)', ordem: 5, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_anciao', nome: 'Ancião', ordem: 6, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_capelao', nome: 'Capelão(a)', ordem: 7, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_instrutor', nome: 'Instrutor', ordem: 8, tipo: 'INSTRUTOR', locked: true },
+    { id: 'cargo_conselheiro', nome: 'Conselheiro(a)', ordem: 9, tipo: 'CONSELHEIRO', locked: true },
+    { id: 'cargo_almoxarifado_clube', nome: 'Almoxarifado', ordem: 10, tipo: 'DIRETORIA', locked: true },
+    { id: 'cargo_midia', nome: 'Diretor de Mídia', ordem: 11, tipo: 'DIRETORIA', locked: false },
+    { id: 'cargo_capitao', nome: 'Capitão/Capitã', ordem: 12, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_secretario_unidade', nome: 'Secretário(a)', ordem: 13, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_tesoureiro_unidade', nome: 'Tesoureiro(a)', ordem: 14, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_capelao_unidade', nome: 'Capelão', ordem: 15, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_almoxarife', nome: 'Almoxarifado', ordem: 16, tipo: 'MEMBRO', locked: false },
+    { id: 'cargo_desbravador', nome: 'Desbravador', ordem: 17, tipo: 'MEMBRO', locked: false },
   ];
 
   const snap = await getDocs(collection(db, 'clubs', clubId, 'cargos'));
   const currentIds = snap.docs.map(d => d.id);
-  const toAdd = defaults.filter(d => !currentIds.includes(d.id));
-
-  if (toAdd.length === 0) return;
-
   const batch = writeBatch(db);
-  toAdd.forEach(c => batch.set(doc(db, 'clubs', clubId, 'cargos', c.id), { ...c, slug: normalizeSlug(c.nome), dedupeKey: createDedupeKey(c.nome), ativo: true, origem: 'PADRAO' }, { merge: true }));
-  await batch.commit();
+
+  // Forçar as nomenclaturas oficiais dos padrões caso já existam (sem sobrescrever a propriedade "ativo" que o usuário configurou)
+  defaults.filter(d => currentIds.includes(d.id)).forEach(c => {
+    batch.set(doc(db, 'clubs', clubId, 'cargos', c.id), { ...c, slug: normalizeSlug(c.nome), dedupeKey: createDedupeKey(c.nome), origem: 'PADRAO' }, { merge: true });
+  });
+
+  // Novos padrões ausentes
+  const toAdd = defaults.filter(d => !currentIds.includes(d.id));
+  toAdd.forEach(c => {
+    batch.set(doc(db, 'clubs', clubId, 'cargos', c.id), { ...c, slug: normalizeSlug(c.nome), dedupeKey: createDedupeKey(c.nome), ativo: true, origem: 'PADRAO' }, { merge: true });
+  });
+
+  if (toAdd.length > 0 || currentIds.length > 0) {
+    await batch.commit();
+  }
 };
 
 export const ensureDefaultUnidades = async (clubId: string) => {
@@ -848,7 +859,9 @@ export const ensureDefaultRanking = async (clubId: string) => {
   validateClub(clubId);
   const year = new Date().getFullYear();
   const metaRef = doc(db, 'clubs', clubId, 'meta', `seed_ranking_${year}`);
-  if ((await getDoc(metaRef)).exists()) return;
+  const metaSnap = await getDoc(metaRef);
+  const metaData = metaSnap.exists() ? metaSnap.data() as { version?: number } : null;
+  if (metaData?.version === RANKING_SEED_VERSION) return;
 
   const batch = writeBatch(db);
   const quarters = buildDefaultRankingQuarters(year);
@@ -862,7 +875,13 @@ export const ensureDefaultRanking = async (clubId: string) => {
     batch.set(doc(db, 'clubs', clubId, 'ranking_requirements', requirement.id), requirement, { merge: true });
   });
 
-  batch.set(metaRef, { done: true, year, createdAt: serverTimestamp() });
+  batch.set(metaRef, deepCleanUndefined({
+    done: true,
+    year,
+    version: RANKING_SEED_VERSION,
+    createdAt: metaSnap.exists() ? metaSnap.data().createdAt || serverTimestamp() : serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }), { merge: true });
   await batch.commit();
 };
 

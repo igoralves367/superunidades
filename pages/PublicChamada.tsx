@@ -4,6 +4,29 @@ import { Unidade, Desbravador, Cargo, Classe, Reuniao, ReuniaoPresenca } from '.
 import * as fs from '../services/firestoreDb';
 import { formatarCargo } from './Membros';
 
+const getPublicRouteValue = () => {
+  const hash = window.location.hash || '';
+
+  const agendaMatch = hash.match(/^#agenda\/([^?]+)/);
+  if (agendaMatch?.[1]) {
+    return decodeURIComponent(agendaMatch[1]);
+  }
+
+  const chamadaMatch = hash.match(/^#chamada\/([^?]+)/);
+  if (chamadaMatch?.[1]) {
+    return decodeURIComponent(chamadaMatch[1]);
+  }
+
+  const queryIndex = hash.indexOf('?');
+  const params = new URLSearchParams(queryIndex >= 0 ? hash.slice(queryIndex + 1) : '');
+  return params.get('clubId') || '';
+};
+
+const isPermissionError = (error: unknown) => {
+  const message = String((error as any)?.message || '');
+  return message.toLowerCase().includes('missing or insufficient permissions');
+};
+
 export const PublicChamada: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [errorInfo, setErrorInfo] = useState<string | null>(null);
@@ -22,13 +45,14 @@ export const PublicChamada: React.FC = () => {
   const [trimestre, setTrimestre] = useState<number>(1);
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
   const [selectedReuniaoId, setSelectedReuniaoId] = useState<string | null>(null);
+  const routeValue = getPublicRouteValue();
 
   const loadData = async () => {
     try {
-      const slug = window.location.hash.replace('#chamada/', '').trim();
-      if (!slug) throw new Error("Link inválido. Clube não identificado.");
-
-      const clube = await fs.findClubByPublicSlug(slug);
+      if (!routeValue) throw new Error("Link inválido. Clube não identificado.");
+      const clube = routeValue.startsWith('clube-')
+        ? await fs.getClub(routeValue)
+        : await fs.findClubByPublicSlug(routeValue);
       if (!clube) throw new Error("Clube não encontrado ou inativo.");
 
       setClubeNome(clube.nome);
@@ -37,7 +61,7 @@ export const PublicChamada: React.FC = () => {
       const currentQuarter = 1; // Março, Abril e Maio como Trimestre 1
       setTrimestre(currentQuarter);
 
-      const [fetchedUnits, fetchedMembers, fetchedCargos, fetchedClasses, fetchedReunioes, fetchedPresencas] = await Promise.all([
+      const settled = await Promise.allSettled([
         fs.listUnidades(clube.id),
         fs.listDesbravadores(clube.id),
         fs.listCargos(clube.id),
@@ -46,13 +70,30 @@ export const PublicChamada: React.FC = () => {
         fs.listPresencasPorTrimestre(clube.id, currentQuarter)
       ]);
 
+      const fetchedUnits = settled[0].status === 'fulfilled' ? settled[0].value : [];
+      const fetchedMembers = settled[1].status === 'fulfilled' ? settled[1].value : [];
+      const fetchedCargos = settled[2].status === 'fulfilled' ? settled[2].value : [];
+      const fetchedClasses = settled[3].status === 'fulfilled' ? settled[3].value : [];
+      const fetchedReunioes = settled[4].status === 'fulfilled' ? settled[4].value : [];
+      const fetchedPresencas = settled[5].status === 'fulfilled' ? settled[5].value : [];
+
       setUnidades(fetchedUnits.filter(u => u.ativo));
       setMembros(fetchedMembers.filter(m => m.status === 'ATIVO'));
       setCargos(fetchedCargos.filter(c => c.ativo));
       setClasses(fetchedClasses.filter(c => c.ativo));
-      
       setReunioes(fetchedReunioes.filter(r => r.ativo));
       setPresencas(fetchedPresencas);
+
+      const hardFailures = settled
+        .filter((item, index) => index !== 2 && index !== 3 && item.status === 'rejected')
+        .map(item => (item as PromiseRejectedResult).reason);
+      if (hardFailures.length > 0) {
+        const permissionIssue = hardFailures.some(isPermissionError);
+        if (permissionIssue) {
+          throw new Error('A agenda pública deste clube ainda não tem permissão liberada no Firestore.');
+        }
+        throw hardFailures[0];
+      }
       
     } catch (err: any) {
       console.error(err);
@@ -64,7 +105,7 @@ export const PublicChamada: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [routeValue]);
 
   const handleQuarterChange = async (newQ: number) => {
     setTrimestre(newQ);
@@ -141,7 +182,7 @@ export const PublicChamada: React.FC = () => {
           <div className="absolute inset-0 bg-[#E53935] rounded-full blur-xl opacity-20 pointer-events-none" />
           <Loader2 className="animate-spin text-[#E53935] relative" size={48} />
         </div>
-        <p className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 animate-pulse">Carregando Chamada...</p>
+        <p className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 animate-pulse">Carregando Agenda...</p>
       </div>
     );
   }
@@ -210,7 +251,7 @@ export const PublicChamada: React.FC = () => {
                     </div>
                     <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight mt-1">{reu.titulo || 'Evento Oficial'}</h2>
                     <div className="text-gray-400 font-bold text-[10px] mt-4 uppercase tracking-widest flex items-center gap-2 group-hover:text-white transition-colors">
-                      Toque para abrir lista de chamada <ChevronDown size={14} className="-rotate-90" />
+                      Toque para abrir agenda de presença <ChevronDown size={14} className="-rotate-90" />
                     </div>
                   </button>
                 ))}

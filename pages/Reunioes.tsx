@@ -116,7 +116,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     );
   }
 
-  const publicLink = `${window.location.origin}/#chamada/${clubSlug}`;
+  const publicLink = `${window.location.origin}/#agenda/${clubSlug}`;
 
   // Agrupar e garantir que tem de todo os trimetres
   const trimestres = [1, 2, 3, 4] as const;
@@ -126,10 +126,10 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-            <CalendarClock className="text-[#E53935]" /> Reuniões e Chamada
+            <CalendarClock className="text-[#E53935]" /> Reuniões e Agenda
           </h1>
           <p className="text-gray-400 font-medium mt-1">
-            Controle os dias de reunião para disponibilizar a lista de chamada.
+            Controle os dias de reunião para disponibilizar a agenda pública de presença.
           </p>
         </div>
         

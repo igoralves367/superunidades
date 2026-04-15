@@ -50,7 +50,7 @@ const App: React.FC = () => {
     return <PublicRanking />;
   }
 
-  if (hashRoute.startsWith('#chamada/')) {
+  if (hashRoute.startsWith('#agenda/') || hashRoute.startsWith('#chamada/')) {
     return <PublicChamada />;
   }
 

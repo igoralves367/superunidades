@@ -12,6 +12,8 @@ import { Membros } from './pages/Membros';
 import { Financeiro } from './pages/Financeiro';
 import { Reunioes } from './pages/Reunioes';
 import { PublicChamada } from './pages/PublicChamada';
+import { Fanfarra } from './pages/Fanfarra';
+import { PublicFanfarra } from './pages/PublicFanfarra';
 import { PerfilAcesso } from './types';
 import { Menu, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
@@ -54,6 +56,10 @@ const App: React.FC = () => {
     return <PublicChamada />;
   }
 
+  if (hashRoute.startsWith('#fanfarra/') || hashRoute.startsWith('#fanfacoes/')) {
+    return <PublicFanfarra />;
+  }
+
   if (!isAuthenticated) {
     return view === 'login' 
       ? <LoginView onCreateClubClick={() => setView('register')} /> 
@@ -77,6 +83,8 @@ const App: React.FC = () => {
         return <Ranking user={currentUser} />;
       case 'reunioes':
         return <Reunioes user={currentUser} />;
+      case 'fanfarra':
+        return <Fanfarra user={currentUser} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center p-10">

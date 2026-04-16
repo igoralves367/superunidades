@@ -40,7 +40,8 @@ import {
   CampanhaVenda,
   VendaItem,
   Reuniao,
-  ReuniaoPresenca
+  ReuniaoPresenca,
+  FanfarraInstrumento
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -1009,4 +1010,77 @@ export const updatePresenca = async (clubId: string, reuniaoId: string, payload:
   });
   
   await setDoc(docRef, cleaned, { merge: true });
+};
+
+// --- FANFARRA ---
+const normalizeFanfarraNumero = (input: string): string => {
+  const digits = String(input || '').replace(/\D/g, '');
+  if (!digits) return '';
+  const numero = Number(digits);
+  if (!Number.isInteger(numero) || numero < 1 || numero > 100) {
+    throw new Error('VALIDACAO|A numeração do instrumento deve estar entre 01 e 100.');
+  }
+  return String(numero).padStart(2, '0');
+};
+
+const ensureFanfarraNumeroUnique = async (clubId: string, numeroInstrumento: string, ignoreId?: string) => {
+  const instrumentos = await listFanfarraInstrumentos(clubId);
+  const duplicado = instrumentos.find(item =>
+    item.ativo !== false &&
+    item.numeroInstrumento === numeroInstrumento &&
+    item.id !== ignoreId
+  );
+
+  if (duplicado) {
+    throw new Error(`VALIDACAO|Já existe um instrumento com a numeração ${numeroInstrumento}.`);
+  }
+};
+
+export const listFanfarraInstrumentos = async (clubId: string): Promise<FanfarraInstrumento[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(collection(db, 'clubs', clubId, 'fanfarra_instrumentos'));
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as FanfarraInstrumento));
+  return items.sort((a, b) => a.numeroInstrumento.localeCompare(b.numeroInstrumento, 'pt-BR'));
+};
+
+export const createFanfarraInstrumento = async (
+  clubId: string,
+  payload: Omit<FanfarraInstrumento, 'id' | 'clubeId' | 'ativo' | 'createdAt' | 'updatedAt'>
+) => {
+  validateClub(clubId);
+  const numeroInstrumento = normalizeFanfarraNumero(payload.numeroInstrumento);
+  await ensureFanfarraNumeroUnique(clubId, numeroInstrumento);
+
+  const docRef = doc(collection(db, 'clubs', clubId, 'fanfarra_instrumentos'));
+  const cleaned = deepCleanUndefined({
+    ...payload,
+    id: docRef.id,
+    clubeId: clubId,
+    numeroInstrumento,
+    ativo: true,
+    createdAt: serverTimestamp()
+  });
+
+  await setDoc(docRef, cleaned);
+  return cleaned as FanfarraInstrumento;
+};
+
+export const updateFanfarraInstrumento = async (
+  clubId: string,
+  id: string,
+  payload: Partial<Omit<FanfarraInstrumento, 'id' | 'clubeId' | 'createdAt'>>
+) => {
+  validateClub(clubId);
+
+  const updatePayload: Record<string, any> = { ...payload };
+  if (payload.numeroInstrumento != null) {
+    const numeroInstrumento = normalizeFanfarraNumero(payload.numeroInstrumento);
+    await ensureFanfarraNumeroUnique(clubId, numeroInstrumento, id);
+    updatePayload.numeroInstrumento = numeroInstrumento;
+  }
+
+  await updateDoc(doc(db, 'clubs', clubId, 'fanfarra_instrumentos', id), deepCleanUndefined({
+    ...updatePayload,
+    updatedAt: serverTimestamp()
+  }));
 };

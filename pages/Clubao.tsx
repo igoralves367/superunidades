@@ -75,6 +75,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
   const [selectedUnit, setSelectedUnit] = useState<Unidade | null>(null);
   const [state, setState] = useState<ProgressState>({});
   const [filter, setFilter] = useState('');
+  const [requirementFilter, setRequirementFilter] = useState('');
 
   const loadBase = async () => {
     if (!clubId) return;
@@ -147,7 +148,17 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
     return buildRankingRows(filteredUnits, requirements, progressDocs);
   }, [unidades, requirements, progressDocs, filter]);
 
-  const groupedRequirements = useMemo(() => groupByCategory(requirements), [requirements]);
+  const filteredRequirements = useMemo(() => {
+    const query = requirementFilter.trim().toLowerCase();
+    if (!query) return requirements;
+
+    return requirements.filter(requirement =>
+      [requirement.name, requirement.description, requirement.category, requirement.bonusDescription, requirement.penaltyDescription]
+        .filter(Boolean)
+        .some(value => (value || '').toLowerCase().includes(query))
+    );
+  }, [requirements, requirementFilter]);
+  const groupedRequirements = useMemo(() => groupByCategory(filteredRequirements), [filteredRequirements]);
   const selectedQuarter = useMemo(
     () => quarters.find(quarter => quarter.id === selectedQuarterId) || null,
     [quarters, selectedQuarterId]
@@ -353,6 +364,16 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
             </div>
           </div>
 
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Buscar requisito</label>
+            <input
+              value={requirementFilter}
+              onChange={e => setRequirementFilter(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+              placeholder="Digite nome, categoria ou descrição..."
+            />
+          </div>
+
           {[...groupedRequirements].map(([category, items]) => (
             <details key={category} open className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl">
               <summary className="cursor-pointer px-5 py-4 flex items-center justify-between">
@@ -500,6 +521,12 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
               </div>
             </details>
           ))}
+
+          {groupedRequirements.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-[#1F2937] p-8 text-center text-gray-500">
+              Nenhum requisito encontrado para a busca informada.
+            </div>
+          )}
 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-[#0B0F1A] border border-[#1F2937] rounded-2xl">
             <div className="flex gap-3 items-center">

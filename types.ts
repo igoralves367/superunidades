@@ -377,3 +377,28 @@ export interface ReuniaoPresenca {
   justificativa?: string;
   updatedAt?: any;
 }
+
+// --- FANFARRA ---
+export type FanfarraTipoInstrumento =
+  | 'PRATO'
+  | 'BUMBO'
+  | 'SURDO'
+  | 'BACURINHA'
+  | 'MARCACAO'
+  | 'REPIQUE';
+
+export type FanfarraTamanhoInstrumento = 'P' | 'M' | 'G';
+export type FanfarraStatusInstrumento = 'ATIVO' | 'MANUTENCAO';
+
+export interface FanfarraInstrumento {
+  id: string;
+  clubeId: string;
+  numeroInstrumento: string; // formato 01..100
+  tipo: FanfarraTipoInstrumento;
+  tamanho: FanfarraTamanhoInstrumento;
+  status: FanfarraStatusInstrumento;
+  desbravadorId: string;
+  ativo: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}

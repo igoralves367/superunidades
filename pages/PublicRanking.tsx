@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Crown, Loader2, Medal, Trophy, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import * as fs from '../services/firestoreDb';
-import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
+import { RankingProgressEntry, RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
 import { buildRankingRows } from '../services/ranking';
 
 const getPublicRouteValue = () => {
@@ -56,6 +56,25 @@ const buildPodiumRows = (ranking: ReturnType<typeof buildRankingRows>) => {
   }
 
   return podium;
+};
+
+const toSafeNumber = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const getBonusInputCount = (requirement: RankingRequirement, result?: RankingProgressEntry) => {
+  if (!result || !requirement.allowBonus || !requirement.bonusType) return 0;
+
+  if (requirement.bonusType === 'FIXED') {
+    return toSafeNumber(result.bonusInput) > 0 ? 1 : 0;
+  }
+
+  if (requirement.bonusType === 'PER_UNIT') {
+    return Math.max(0, toSafeNumber(result.bonusInput ?? (requirement.requiresQuantity ? result.quantity : 0)));
+  }
+
+  return Math.max(0, toSafeNumber(result.bonusInput));
 };
 
 export const PublicRanking: React.FC = () => {
@@ -352,13 +371,25 @@ export const PublicRanking: React.FC = () => {
                         const progress = progressDocs.find(d => d.unitId === row.unidade.id);
                         const result = progress?.resultados?.[req.id];
                         const points = result ? (result.calculatedPoints || 0) : 0;
+                        const basePoints = result?.basePoints || 0;
+                        const bonusPoints = result?.bonusPoints || 0;
+                        const penaltyPoints = result?.penaltyPoints || 0;
+                        const bonusInputCount = getBonusInputCount(req, result);
                         if (points <= 0) return null;
                         
                         return (
-                          <div key={req.id} className="flex items-center justify-between bg-black/20 rounded-xl p-3 border border-white/5 hover:bg-white/5 transition-colors">
+                          <div key={req.id} className="flex items-center justify-between bg-black/20 rounded-xl p-3 border border-white/5 hover:bg-white/5 transition-colors gap-3">
                             <div className="flex items-center gap-3">
                               <CheckCircle2 size={16} className="text-[#00F5A0] shrink-0" />
-                              <span className="text-sm font-medium text-gray-300">{req.name}</span>
+                              <div>
+                                <span className="text-sm font-medium text-gray-300">{req.name}</span>
+                                <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+                                  Base +{basePoints}
+                                  {bonusPoints > 0 && ` | Bônus +${bonusPoints}`}
+                                  {bonusPoints > 0 && bonusInputCount > 0 && ` (${bonusInputCount} bônus)`}
+                                  {penaltyPoints > 0 && ` | Penal -${penaltyPoints}`}
+                                </p>
+                              </div>
                             </div>
                             <span className="text-sm font-black text-[#FFD60A] shrink-0 ml-3">+{points}</span>
                           </div>

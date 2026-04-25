@@ -159,6 +159,32 @@ export interface EventoCampori {
   dataTermino?: string;
   valorPadrao: number;
   ativo: boolean;
+  condicaoPagamentoAtiva?: boolean;
+  condicaoPagamentoValor?: number;
+  condicaoPagamentoDescricao?: string;
+  participantes?: EventoCamporiParticipante[];
+  saidas?: EventoCamporiSaida[];
+}
+
+export interface EventoCamporiParticipante {
+  id: string;
+  desbravadorId: string;
+  nome: string;
+  valor: number;
+  pago: boolean;
+  unidadeId?: string;
+  unidadeNome?: string;
+  dataPagamento?: string;
+  lancamentoCaixaId?: string;
+  condicaoPagamentoAplicada?: boolean;
+}
+
+export interface EventoCamporiSaida {
+  id: string;
+  descricao: string;
+  valor: number;
+  data: string;
+  lancamentoCaixaId?: string;
 }
 
 export interface CarneCampori {
@@ -221,6 +247,9 @@ export interface LancamentoCaixa {
   valor: number;
   data: string;
   unidadeId?: string;
+  eventoCamporiId?: string;
+  participanteEventoId?: string;
+  saidaEventoId?: string;
 }
 
 export interface ReceitaCampori {

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Music2, Wrench } from 'lucide-react';
+import { Loader2, Wrench } from 'lucide-react';
 import * as fs from '../services/firestoreDb';
 import { Desbravador, FanfarraInstrumento, FanfarraStatusInstrumento, FanfarraTipoInstrumento } from '../types';
+import { FanfarraInstrumentIcon } from '../components/FanfarraInstrumentIcon';
 
 const TIPOS_ORDEM: FanfarraTipoInstrumento[] = ['BUMBO', 'PRATO', 'SURDO', 'BACURINHA', 'REPIQUE', 'MARCACAO'];
 
@@ -162,7 +163,12 @@ export const PublicFanfarra: React.FC = () => {
 
         {agrupadoPorTipo.map(grupo => (
           <section key={grupo.tipo} className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(11,15,26,0.96))] p-5 md:p-6">
-            <h2 className="text-2xl font-black mb-4">{TIPO_LABEL[grupo.tipo]}</h2>
+            <h2 className="text-2xl font-black mb-4 flex items-center gap-3">
+              <span className="w-9 h-9 rounded-xl bg-[#111827] border border-[#1F2937] flex items-center justify-center text-[#E53935]">
+                <FanfarraInstrumentIcon tipo={grupo.tipo} size={20} />
+              </span>
+              {TIPO_LABEL[grupo.tipo]}
+            </h2>
 
             {grupo.itens.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#1F2937] p-6 text-sm text-gray-500">
@@ -177,7 +183,7 @@ export const PublicFanfarra: React.FC = () => {
                     <article key={item.id} className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 rounded-xl bg-[#111827] border border-[#1F2937] flex items-center justify-center shrink-0">
-                          <Music2 size={20} className="text-[#E53935]" />
+                          <FanfarraInstrumentIcon tipo={item.tipo} size={20} className="text-[#E53935]" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm text-gray-400">Numeração <span className="font-black text-white">{item.numeroInstrumento}</span></p>
@@ -189,7 +195,7 @@ export const PublicFanfarra: React.FC = () => {
                           ? 'text-[#00F5A0] bg-[#00F5A0]/10 border-[#00F5A0]/20'
                           : 'text-[#FFD60A] bg-[#FFD60A]/10 border-[#FFD60A]/20'
                       }`}>
-                        {ativo ? <Music2 size={14} /> : <Wrench size={14} />}
+                        {ativo ? <FanfarraInstrumentIcon tipo={item.tipo} size={14} /> : <Wrench size={14} />}
                         {STATUS_LABEL[item.status]}
                       </div>
                     </article>

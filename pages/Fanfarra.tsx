@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Music2, Plus, Save, Wrench, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { Loader2, Plus, Save, Wrench, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { Usuario, Desbravador, FanfarraInstrumento, FanfarraTipoInstrumento, FanfarraTamanhoInstrumento, FanfarraStatusInstrumento } from '../types';
 import * as fs from '../services/firestoreDb';
+import { FanfarraInstrumentIcon } from '../components/FanfarraInstrumentIcon';
 
 interface FanfarraProps {
   user: Usuario;
@@ -100,6 +101,13 @@ export const Fanfarra: React.FC<FanfarraProps> = ({ user }) => {
     }, {});
   }, [membros]);
 
+  const agrupadoPorTipo = useMemo(() => {
+    return TIPOS_ORDEM.map(tipoItem => ({
+      tipo: tipoItem,
+      itens: instrumentos.filter(item => item.tipo === tipoItem)
+    })).filter(grupo => grupo.itens.length > 0);
+  }, [instrumentos]);
+
   const handleOpenCreate = () => {
     resetForm();
     setIsModalOpen(true);
@@ -172,7 +180,7 @@ export const Fanfarra: React.FC<FanfarraProps> = ({ user }) => {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight flex items-center gap-3">
-            <Music2 className="text-[#E53935]" /> Fanfarra
+            <FanfarraInstrumentIcon tipo="BUMBO" size={28} className="text-[#E53935]" /> Fanfarra
           </h1>
           <p className="text-gray-400 font-medium mt-1">
             Cadastro dos instrumentos com numeração, tipo, tamanho, status e responsável.
@@ -199,47 +207,70 @@ export const Fanfarra: React.FC<FanfarraProps> = ({ user }) => {
 
       {instrumentos.length === 0 ? (
         <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
-          <Music2 size={40} className="mx-auto text-gray-600 mb-4" />
+          <FanfarraInstrumentIcon tipo="PRATO" size={40} className="mx-auto text-gray-600 mb-4" />
           <p className="text-gray-400 font-bold">Nenhum instrumento cadastrado.</p>
         </div>
       ) : (
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {instrumentos.map(instrumento => {
-            const responsavel = membrosMap[instrumento.desbravadorId];
-            const isAtivo = instrumento.status === 'ATIVO';
-            return (
-              <button
-                key={instrumento.id}
-                onClick={() => handleEdit(instrumento)}
-                className="text-left bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-5 space-y-4 hover:border-[#E53935]/40 transition-all"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Numeração</p>
-                    <h2 className="text-3xl font-black text-white mt-1">{instrumento.numeroInstrumento}</h2>
-                  </div>
-                  <span className={`text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg border ${
-                    isAtivo
-                      ? 'text-[#00F5A0] bg-[#00F5A0]/10 border-[#00F5A0]/20'
-                      : 'text-[#FFD60A] bg-[#FFD60A]/10 border-[#FFD60A]/20'
-                  }`}>
-                    {STATUS_LABEL[instrumento.status]}
+        <div className="space-y-6">
+          {agrupadoPorTipo.map(grupo => (
+            <section key={grupo.tipo} className="rounded-3xl border border-[#1F2937] bg-[#0B0F1A] p-4 md:p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                  <span className="w-9 h-9 rounded-xl bg-[#111827] border border-[#1F2937] flex items-center justify-center text-[#E53935]">
+                    <FanfarraInstrumentIcon tipo={grupo.tipo} size={18} />
                   </span>
-                </div>
+                  {TIPO_LABEL[grupo.tipo]}
+                </h2>
+                <span className="text-[10px] uppercase tracking-widest font-black text-gray-500">
+                  {grupo.itens.length} item{grupo.itens.length > 1 ? 's' : ''}
+                </span>
+              </div>
 
-                <div className="space-y-1">
-                  <p className="font-black text-white text-xl">{TIPO_LABEL[instrumento.tipo]}</p>
-                  <p className="text-xs uppercase tracking-widest font-black text-gray-500">Tamanho {TAMANHO_LABEL[instrumento.tamanho]}</p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {grupo.itens.map(instrumento => {
+                  const responsavel = membrosMap[instrumento.desbravadorId];
+                  const isAtivo = instrumento.status === 'ATIVO';
+                  return (
+                    <button
+                      key={instrumento.id}
+                      onClick={() => handleEdit(instrumento)}
+                      className="text-left bg-[#0A0D16] border border-[#1F2937] rounded-2xl p-5 space-y-4 hover:border-[#E53935]/40 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Numeração</p>
+                          <h2 className="text-3xl font-black text-white mt-1">{instrumento.numeroInstrumento}</h2>
+                        </div>
+                        <span className={`text-[10px] uppercase font-black tracking-widest px-2.5 py-1 rounded-lg border ${
+                          isAtivo
+                            ? 'text-[#00F5A0] bg-[#00F5A0]/10 border-[#00F5A0]/20'
+                            : 'text-[#FFD60A] bg-[#FFD60A]/10 border-[#FFD60A]/20'
+                        }`}>
+                          {STATUS_LABEL[instrumento.status]}
+                        </span>
+                      </div>
 
-                <div className="rounded-xl border border-[#1F2937] bg-[#111827] px-3 py-2">
-                  <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Responsável</p>
-                  <p className="text-sm font-bold text-gray-200 mt-1">{responsavel?.nome || 'Membro não encontrado'}</p>
-                </div>
-              </button>
-            );
-          })}
-        </section>
+                      <div className="space-y-1">
+                        <p className="font-black text-white text-xl flex items-center gap-2">
+                          <span className="w-8 h-8 rounded-lg bg-[#111827] border border-[#1F2937] flex items-center justify-center text-[#E53935]">
+                            <FanfarraInstrumentIcon tipo={instrumento.tipo} size={16} />
+                          </span>
+                          {TIPO_LABEL[instrumento.tipo]}
+                        </p>
+                        <p className="text-xs uppercase tracking-widest font-black text-gray-500">Tamanho {TAMANHO_LABEL[instrumento.tamanho]}</p>
+                      </div>
+
+                      <div className="rounded-xl border border-[#1F2937] bg-[#111827] px-3 py-2">
+                        <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Responsável</p>
+                        <p className="text-sm font-bold text-gray-200 mt-1">{responsavel?.nome || 'Membro não encontrado'}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
 
       <Modal
@@ -251,7 +282,7 @@ export const Fanfarra: React.FC<FanfarraProps> = ({ user }) => {
           }
         }}
         title={editingId ? 'Editar Instrumento' : 'Novo Instrumento'}
-        icon={<Music2 />}
+        icon={<FanfarraInstrumentIcon tipo={tipo} />}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

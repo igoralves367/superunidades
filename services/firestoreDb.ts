@@ -35,8 +35,9 @@ import {
   RankingRequirement,
   RankingProgressEntry,
   RankingUnitProgressDoc,
-  RankingUnitProgressDoc,
   EventoCampori,
+  EventoCamporiParticipante,
+  EventoCamporiSaida,
   CampanhaVenda,
   VendaItem,
   Reuniao,
@@ -806,6 +807,43 @@ export const listRankingRequirements = async (clubId: string, quarterId?: string
   return items.sort((a, b) => a.displayOrder - b.displayOrder);
 };
 
+export const createRankingRequirement = async (
+  clubId: string,
+  payload: Omit<RankingRequirement, 'id' | 'origem' | 'active'>
+) => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'ranking_requirements'));
+  const cleaned = deepCleanUndefined({
+    ...payload,
+    id: docRef.id,
+    active: true,
+    origem: 'CUSTOM',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+  await setDoc(docRef, cleaned);
+  return { id: docRef.id, ...cleaned } as RankingRequirement;
+};
+
+export const updateRankingRequirement = async (
+  clubId: string,
+  requirementId: string,
+  payload: Partial<RankingRequirement>
+) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'ranking_requirements', requirementId), deepCleanUndefined({
+    ...payload,
+    updatedAt: serverTimestamp()
+  }));
+};
+
+export const deactivateRankingRequirement = async (
+  clubId: string,
+  requirementId: string
+) => {
+  return updateRankingRequirement(clubId, requirementId, { active: false });
+};
+
 export const listRankingProgress = async (clubId: string, quarterId: string): Promise<RankingUnitProgressDoc[]> => {
   validateClub(clubId);
   const snap = await getDocs(query(collection(db, 'clubs', clubId, 'ranking_progress'), where('quarterId', '==', quarterId)));
@@ -902,6 +940,191 @@ export const updateEventoCampori = async (clubId: string, id: string, payload: P
 export const deleteEventoCampori = async (clubId: string, id: string) => {
   validateClub(clubId);
   await deleteDoc(doc(db, 'clubs', clubId, 'campori_eventos', id));
+};
+
+export const registrarPagamentoEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string,
+  options?: {
+    aplicarCondicaoPagamento?: boolean;
+    valorCondicaoPagamento?: number;
+    dataPagamento?: string;
+  }
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const participantes = (evento.participantes || []) as EventoCamporiParticipante[];
+  const participante = participantes.find(item => item.id === participanteId);
+  if (!participante) {
+    throw new Error('Participante não encontrado no evento.');
+  }
+  if (participante.pago) return;
+
+  const condicaoPagamentoAtiva = Boolean(evento.condicaoPagamentoAtiva);
+  const aplicarCondicaoPagamento = Boolean(options?.aplicarCondicaoPagamento) && condicaoPagamentoAtiva;
+  const valorBase = Number(participante.valor ?? evento.valorPadrao ?? 0);
+  const valorCondicao = Number(evento.condicaoPagamentoValor ?? options?.valorCondicaoPagamento ?? 0);
+  const valorPagamento = aplicarCondicaoPagamento && valorCondicao > 0 ? valorCondicao : valorBase;
+  const dataPagamento = options?.dataPagamento || new Date().toISOString();
+  const caixaRef = doc(collection(db, 'clubs', clubId, 'caixa'));
+  const lancamentoCaixaId = caixaRef.id;
+
+  const participantesAtualizados = participantes.map(item => {
+    if (item.id !== participanteId) return item;
+    return {
+      ...item,
+      valor: valorPagamento,
+      pago: true,
+      dataPagamento,
+      lancamentoCaixaId,
+      condicaoPagamentoAplicada: aplicarCondicaoPagamento || undefined
+    };
+  });
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    participantes: participantesAtualizados,
+    updatedAt: serverTimestamp()
+  }));
+  batch.set(caixaRef, deepCleanUndefined({
+    id: lancamentoCaixaId,
+    clubeId: clubId,
+    tipo: 'ENTRADA',
+    descricao: `Pagamento do evento ${evento.nome} - ${participante.nome}${
+      aplicarCondicaoPagamento ? ` (${evento.condicaoPagamentoDescricao || 'condição especial'})` : ''
+    }`,
+    categoria: 'EVENTO',
+    valor: valorPagamento,
+    data: dataPagamento,
+    eventoCamporiId: eventoId,
+    participanteEventoId: participanteId,
+    createdAt: serverTimestamp()
+  }));
+
+  await batch.commit();
+};
+
+export const atualizarDataPagamentoEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string,
+  dataPagamento: string
+) => {
+  return atualizarPagamentoEventoCampori(clubId, eventoId, participanteId, { dataPagamento });
+};
+
+export const atualizarPagamentoEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string,
+  payload: {
+    valor?: number;
+    dataPagamento?: string;
+    condicaoPagamentoAplicada?: boolean;
+  }
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const participantes = (evento.participantes || []) as EventoCamporiParticipante[];
+  const participante = participantes.find(item => item.id === participanteId);
+  if (!participante) {
+    throw new Error('Participante não encontrado no evento.');
+  }
+  if (!participante.pago) {
+    throw new Error('Participante ainda não está com pagamento confirmado.');
+  }
+
+  const valorAtualizado = Number(payload.valor ?? participante.valor ?? evento.valorPadrao ?? 0);
+  const dataPagamentoAtualizada = payload.dataPagamento || participante.dataPagamento || new Date().toISOString();
+  const condicaoAplicadaAtualizada = payload.condicaoPagamentoAplicada ?? !!participante.condicaoPagamentoAplicada;
+
+  const participantesAtualizados = participantes.map(item => {
+    if (item.id !== participanteId) return item;
+    return {
+      ...item,
+      valor: valorAtualizado,
+      dataPagamento: dataPagamentoAtualizada,
+      condicaoPagamentoAplicada: condicaoAplicadaAtualizada || undefined
+    };
+  });
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    participantes: participantesAtualizados,
+    updatedAt: serverTimestamp()
+  }));
+
+  if (participante.lancamentoCaixaId) {
+    batch.update(doc(db, 'clubs', clubId, 'caixa', participante.lancamentoCaixaId), deepCleanUndefined({
+      valor: valorAtualizado,
+      data: dataPagamentoAtualizada,
+      descricao: `Pagamento do evento ${evento.nome} - ${participante.nome}${
+        condicaoAplicadaAtualizada ? ` (${evento.condicaoPagamentoDescricao || 'condição especial'})` : ''
+      }`,
+      updatedAt: serverTimestamp()
+    }));
+  }
+
+  await batch.commit();
+};
+
+export const adicionarSaidaEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  payload: Omit<EventoCamporiSaida, 'id' | 'data' | 'lancamentoCaixaId'>
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const saidasAtuais = (evento.saidas || []) as EventoCamporiSaida[];
+  const saidaId = doc(collection(db, 'clubs', clubId, 'caixa')).id;
+  const caixaRef = doc(collection(db, 'clubs', clubId, 'caixa'));
+  const dataSaida = new Date().toISOString();
+  const novaSaida: EventoCamporiSaida = {
+    id: saidaId,
+    descricao: payload.descricao,
+    valor: Number(payload.valor || 0),
+    data: dataSaida,
+    lancamentoCaixaId: caixaRef.id
+  };
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    saidas: [...saidasAtuais, novaSaida],
+    updatedAt: serverTimestamp()
+  }));
+  batch.set(caixaRef, deepCleanUndefined({
+    id: caixaRef.id,
+    clubeId: clubId,
+    tipo: 'SAIDA',
+    descricao: `Saída do evento ${evento.nome} - ${payload.descricao}`,
+    categoria: 'EVENTO',
+    valor: Number(payload.valor || 0),
+    data: dataSaida,
+    eventoCamporiId: eventoId,
+    saidaEventoId: novaSaida.id,
+    createdAt: serverTimestamp()
+  }));
+
+  await batch.commit();
 };
 
 // --- CAMPANHAS DE VENDAS ---

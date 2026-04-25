@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, CheckCircle2, Copy, Loader2, Save, Trophy } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Copy, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
 import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
@@ -15,6 +15,19 @@ interface RankingProps {
 }
 
 type ProgressState = Record<string, RankingProgressEntry>;
+type NewRequirementForm = {
+  category: string;
+  name: string;
+  description: string;
+  points: number;
+};
+
+const defaultNewRequirementForm = (): NewRequirementForm => ({
+  category: 'Requisitos extras',
+  name: '',
+  description: '',
+  points: 100
+});
 
 const groupRequirements = (requirements: RankingRequirement[]) => {
   const map = new Map<string, RankingRequirement[]>();
@@ -63,6 +76,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
+  const [savingRequirement, setSavingRequirement] = useState(false);
+  const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
 
   const loadBase = async () => {
     if (!clubId) return;
@@ -192,6 +207,75 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     }
   };
 
+  const handleCreateRequirement = async () => {
+    if (!clubId || !selectedQuarterId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
+    const name = newRequirementForm.name.trim();
+    const category = newRequirementForm.category.trim() || 'Requisitos extras';
+    const description = newRequirementForm.description.trim();
+    const points = Math.max(0, Number(newRequirementForm.points) || 0);
+
+    if (!name) {
+      alert('Informe o texto do requisito.');
+      return;
+    }
+
+    setSavingRequirement(true);
+    try {
+      const nextDisplayOrder = requirements.reduce((max, current) => Math.max(max, Number(current.displayOrder || 0)), 0) + 1;
+      await fs.createRankingRequirement(clubId, {
+        quarterId: selectedQuarterId,
+        category,
+        name,
+        description,
+        points,
+        ruleType: 'BOOLEAN',
+        requiresQuantity: false,
+        quantityLabel: null,
+        pointsPerUnit: null,
+        maxQuantity: null,
+        allowBonus: false,
+        bonusType: null,
+        bonusValue: null,
+        bonusDescription: null,
+        allowPenalty: false,
+        penaltyType: null,
+        penaltyValue: null,
+        penaltyDescription: null,
+        maxManualScore: null,
+        displayOrder: nextDisplayOrder
+      });
+
+      setNewRequirementForm(defaultNewRequirementForm());
+      await loadQuarterData(selectedQuarterId);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao adicionar requisito.');
+    } finally {
+      setSavingRequirement(false);
+    }
+  };
+
+  const handleDeleteRequirement = async (requirement: RankingRequirement) => {
+    if (!clubId || !selectedQuarterId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
+    if (requirement.origem !== 'CUSTOM') {
+      alert('Somente requisitos adicionados manualmente podem ser removidos.');
+      return;
+    }
+
+    if (!window.confirm(`Remover o requisito "${requirement.name}" deste trimestre?`)) return;
+
+    setSavingRequirement(true);
+    try {
+      await fs.deactivateRankingRequirement(clubId, requirement.id);
+      await loadQuarterData(selectedQuarterId);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao remover requisito.');
+    } finally {
+      setSavingRequirement(false);
+    }
+  };
+
   if (loading && quarters.length === 0) {
     return <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#E53935]" /></div>;
   }
@@ -315,6 +399,70 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
         </aside>
 
         <section className="rounded-3xl border border-[#1F2937] bg-[#111827] p-6 space-y-6">
+          <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Novo requisito no trimestre</p>
+                <p className="text-sm text-gray-300">Adicione texto e pontuação para novas demandas durante o trimestre.</p>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                {selectedQuarter?.name || 'Trimestre'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Categoria</label>
+                <input
+                  value={newRequirementForm.category}
+                  onChange={e => setNewRequirementForm(prev => ({ ...prev, category: e.target.value }))}
+                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                  placeholder="Ex.: Secretaria"
+                />
+              </div>
+              <div className="space-y-1 xl:col-span-2">
+                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Texto do requisito</label>
+                <input
+                  value={newRequirementForm.name}
+                  onChange={e => setNewRequirementForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                  placeholder="Ex.: Ação missionária extra no bairro"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Pontuação</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={newRequirementForm.points}
+                  onChange={e => {
+                    const next = Number(e.target.value);
+                    setNewRequirementForm(prev => ({ ...prev, points: Number.isFinite(next) ? next : 0 }));
+                  }}
+                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Descrição (opcional)</label>
+              <input
+                value={newRequirementForm.description}
+                onChange={e => setNewRequirementForm(prev => ({ ...prev, description: e.target.value }))}
+                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                placeholder="Detalhes de validação desse requisito"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleCreateRequirement}
+                disabled={savingRequirement || !selectedQuarter || selectedQuarter.status === 'CLOSED'}
+                className="px-4 py-2 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
+              >
+                {savingRequirement ? <Loader2 className="animate-spin" size={14} /> : <PlusCircle size={14} />}
+                Adicionar requisito
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Unidade selecionada</p>
@@ -342,6 +490,11 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-black text-white">{requirement.name}</span>
+                            {requirement.origem === 'CUSTOM' && (
+                              <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-[#E53935]/10 text-[#FCA5A5]">
+                                Custom
+                              </span>
+                            )}
                             <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-white/5 text-gray-300">
                               {getRequirementRuleLabel(requirement.ruleType)}
                             </span>
@@ -362,7 +515,16 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                             {requirement.penaltyDescription && <span>Penalidade: {requirement.penaltyDescription}</span>}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right space-y-2">
+                          {requirement.origem === 'CUSTOM' && (
+                            <button
+                              onClick={() => handleDeleteRequirement(requirement)}
+                              disabled={savingRequirement || !selectedQuarter || selectedQuarter.status === 'CLOSED'}
+                              className="px-3 py-1.5 rounded-lg border border-red-500/30 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:opacity-60 inline-flex items-center gap-1"
+                            >
+                              <Trash2 size={12} /> Remover
+                            </button>
+                          )}
                           <p className="text-2xl font-black text-white">{row?.calculatedPoints || 0}</p>
                           <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">
                             base {row?.basePoints || 0} | b {row?.bonusPoints || 0} | p {row?.penaltyPoints || 0}

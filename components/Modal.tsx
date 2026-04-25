@@ -7,21 +7,25 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   icon?: React.ReactNode;
+  maxWidthClassName?: string;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, icon }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, icon, maxWidthClassName = 'max-w-md' }) => {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
+    if (!isOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow || 'unset';
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto">
       {/* Overlay */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -29,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       />
       
       {/* Content */}
-      <div className="relative w-full max-w-md bg-[#111827] border border-[#1F2937] rounded-3xl shadow-2xl p-6 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className={`relative my-4 sm:my-8 w-full ${maxWidthClassName} max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] bg-[#111827] border border-[#1F2937] rounded-3xl shadow-2xl p-6 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200`}>
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#E53935]/5 rounded-bl-full -z-10" />
         
         <div className="flex items-center justify-between mb-6">

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Users, FileWarning, Search, User, Plus, Save } from 'lucide-react';
+import { Loader2, Users, FileWarning, Search, User, Plus, Save, Flag, Trash2 } from 'lucide-react';
 import { Usuario, Unidade, Desbravador, Cargo, Classe } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
@@ -62,6 +62,7 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
   const [selectedCargoId, setSelectedCargoId] = useState<string>('');
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingMemberId, setIsDeletingMemberId] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!user.clubeId) return;
@@ -138,6 +139,35 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
       alert('Erro ao salvar membro. Tente novamente.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteMember = async (membro: Desbravador) => {
+    if (!user.clubeId || !membro.id || isDeletingMemberId) return;
+
+    const confirmed = window.confirm(
+      `Excluir "${membro.nome}"?\n\nEsta ação vai remover presença, fanfarra e vínculos financeiros relacionados ao membro.`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingMemberId(membro.id);
+    try {
+      await fs.deleteDesbravador(user.clubeId, membro.id);
+
+      if (editingMemberId === membro.id) {
+        setEditingMemberId(null);
+        setIsModalOpen(false);
+        setSelectedClassesIds([]);
+        setSelectedCargoId('');
+        setNewMemberName('');
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao excluir membro:', error);
+      alert('Erro ao excluir membro. Tente novamente.');
+    } finally {
+      setIsDeletingMemberId(null);
     }
   };
 
@@ -225,8 +255,9 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
                       const mClasses = (membro.classeIds || [membro.classeId]).filter(Boolean).map(cid => classes.find(c => c.id === cid));
 
                       return (
-                      <li key={membro.id} className="flex items-center justify-between text-sm group/item">
+                      <li key={membro.id} className="flex items-center justify-between gap-2 text-sm group/item">
                         <button 
+                          type="button"
                           onClick={() => {
                             setEditingMemberId(membro.id);
                             setNewMemberName(membro.nome);
@@ -251,6 +282,20 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
                             <span className="text-[9px] uppercase tracking-wider text-[#FFD60A] bg-[#FFD60A]/10 px-1.5 py-0.5 rounded border border-[#FFD60A]/20">
                               {mCargos}
                             </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMember(membro)}
+                          disabled={isDeletingMemberId === membro.id}
+                          className="p-1.5 rounded-lg border border-transparent text-gray-500 hover:text-[#E53935] hover:border-[#E53935]/30 hover:bg-[#E53935]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Excluir membro"
+                        >
+                          {isDeletingMemberId === membro.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={14} />
                           )}
                         </button>
                       </li>

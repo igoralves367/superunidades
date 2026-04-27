@@ -689,6 +689,29 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     }
   };
 
+  const retirarPagamentoParticipante = async (participante: EventoCamporiParticipante) => {
+    if (!user.clubeId || !eventoAberto) return;
+
+    const confirmed = window.confirm(
+      `Retirar o pagamento de ${participante.nome}?\n\nO lançamento de caixa deste pagamento será removido.`
+    );
+    if (!confirmed) return;
+
+    setSavingParticipanteId(participante.id);
+    try {
+      await fs.retirarPagamentoEventoCampori(user.clubeId, eventoAberto.id, participante.id);
+      if (editandoPagamentoParticipanteId === participante.id) {
+        cancelarEdicaoPagamento();
+      }
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao retirar pagamento.');
+    } finally {
+      setSavingParticipanteId(null);
+    }
+  };
+
   const handleSalvarConfiguracoesEvento = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user.clubeId || !eventoAberto) return;
@@ -1182,13 +1205,23 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                 </div>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => iniciarEdicaoPagamento(participante)}
-                                className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
-                              >
-                                Editar pagamento
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => iniciarEdicaoPagamento(participante)}
+                                  className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
+                                >
+                                  Editar pagamento
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void retirarPagamentoParticipante(participante)}
+                                  disabled={savingParticipanteId === participante.id}
+                                  className="px-2 py-1 rounded-lg border border-[#7F1D1D] text-[#FCA5A5] text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                                >
+                                  {savingParticipanteId === participante.id ? 'Processando...' : 'Retirar pagamento'}
+                                </button>
+                              </div>
                             )}
                           </div>
                         ) : participanteConfirmacaoPagamentoId === participante.id ? (

@@ -10,7 +10,8 @@ import {
   serverTimestamp,
   getDoc,
   writeBatch,
-  where
+  where,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -414,7 +415,171 @@ export const updateDesbravador = (clubId: string, id: string, payload: any) => {
   return updateDoc(doc(db, 'clubs', clubId, 'desbravadores', id), cleaned);
 };
 
-export const deleteDesbravador = (clubId: string, id: string) => deleteDoc(doc(db, 'clubs', clubId, 'desbravadores', id));
+const MAX_BATCH_WRITES = 450;
+const commitBatchOperations = async (operations: Array<(batch: ReturnType<typeof writeBatch>) => void>) => {
+  for (let idx = 0; idx < operations.length; idx += MAX_BATCH_WRITES) {
+    const batch = writeBatch(db);
+    operations.slice(idx, idx + MAX_BATCH_WRITES).forEach(run => run(batch));
+    await batch.commit();
+  }
+};
+
+export const deleteDesbravador = async (clubId: string, id: string) => {
+  validateClub(clubId);
+
+  const [
+    presencasSnap,
+    fanfarraSnap,
+    progressoSnap,
+    sociosPorDesbravadorSnap,
+    sociosPorIndicacaoSnap,
+    vendaItemsSnap,
+    carnesSnap,
+    eventosSnap
+  ] = await Promise.all([
+    getDocs(query(collection(db, 'clubs', clubId, 'reunioes_presencas'), where('desbravadorId', '==', id))),
+    getDocs(query(collection(db, 'clubs', clubId, 'fanfarra_instrumentos'), where('desbravadorId', '==', id))),
+    getDocs(collection(db, 'clubs', clubId, 'desbravadores', id, 'progresso')),
+    getDocs(query(collection(db, 'clubs', clubId, 'socios'), where('desbravadorId', '==', id))),
+    getDocs(query(collection(db, 'clubs', clubId, 'socios'), where('indicadoPorMembroId', '==', id))),
+    getDocs(query(collection(db, 'clubs', clubId, 'venda_items'), where('vendidoPorMembroId', '==', id))),
+    getDocs(query(collection(db, 'clubs', clubId, 'campori_carnes'), where('desbravadorId', '==', id))),
+    getDocs(collection(db, 'clubs', clubId, 'campori_eventos'))
+  ]);
+
+  const carneIds = new Set(carnesSnap.docs.map(snap => snap.id));
+  const parcelasSnap =
+    carneIds.size > 0
+      ? await getDocs(collection(db, 'clubs', clubId, 'campori_parcelas'))
+      : null;
+
+  const eventosComParticipante: Array<{ ref: any; participantes: EventoCamporiParticipante[] }> = [];
+  const participanteIdsRemovidos = new Set<string>([id]);
+
+  eventosSnap.docs.forEach(eventoSnap => {
+    const eventoData = eventoSnap.data() as EventoCampori;
+    const participantes = Array.isArray(eventoData.participantes)
+      ? (eventoData.participantes as EventoCamporiParticipante[])
+      : [];
+
+    const participantesAtualizados = participantes.filter(participante => {
+      const participanteId = String(participante.id || '');
+      const vinculadoAoMembro = participante.desbravadorId === id || participanteId === id;
+
+      if (vinculadoAoMembro) {
+        participanteIdsRemovidos.add(participanteId || id);
+      }
+
+      return !vinculadoAoMembro;
+    });
+
+    if (participantesAtualizados.length !== participantes.length) {
+      eventosComParticipante.push({
+        ref: eventoSnap.ref,
+        participantes: participantesAtualizados
+      });
+    }
+  });
+
+  const caixaRefs = new Map<string, any>();
+  const participanteIds = Array.from(participanteIdsRemovidos).filter(Boolean);
+  if (participanteIds.length > 0) {
+    const caixaSnaps = await Promise.all(
+      participanteIds.map(participanteId =>
+        getDocs(query(collection(db, 'clubs', clubId, 'caixa'), where('participanteEventoId', '==', participanteId)))
+      )
+    );
+
+    caixaSnaps.forEach(snap => {
+      snap.docs.forEach(docSnap => caixaRefs.set(docSnap.id, docSnap.ref));
+    });
+  }
+
+  const sociosParaLimpar = new Map<string, { ref: any; limparDesbravadorId: boolean; limparIndicacao: boolean }>();
+  sociosPorDesbravadorSnap.docs.forEach(docSnap => {
+    sociosParaLimpar.set(docSnap.id, { ref: docSnap.ref, limparDesbravadorId: true, limparIndicacao: false });
+  });
+  sociosPorIndicacaoSnap.docs.forEach(docSnap => {
+    const atual = sociosParaLimpar.get(docSnap.id);
+    if (atual) {
+      sociosParaLimpar.set(docSnap.id, { ...atual, limparIndicacao: true });
+      return;
+    }
+    sociosParaLimpar.set(docSnap.id, { ref: docSnap.ref, limparDesbravadorId: false, limparIndicacao: true });
+  });
+
+  const operations: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+  progressoSnap.docs.forEach(docSnap => {
+    operations.push(batch => batch.delete(docSnap.ref));
+  });
+
+  operations.push(batch => batch.delete(doc(db, 'clubs', clubId, 'secretaria', id)));
+
+  presencasSnap.docs.forEach(docSnap => {
+    operations.push(batch => batch.delete(docSnap.ref));
+  });
+
+  fanfarraSnap.docs.forEach(docSnap => {
+    operations.push(batch =>
+      batch.update(docSnap.ref, {
+        desbravadorId: '',
+        updatedAt: serverTimestamp()
+      })
+    );
+  });
+
+  sociosParaLimpar.forEach(socio => {
+    const updatePayload: Record<string, any> = { updatedAt: serverTimestamp() };
+    if (socio.limparDesbravadorId) updatePayload.desbravadorId = deleteField();
+    if (socio.limparIndicacao) updatePayload.indicadoPorMembroId = deleteField();
+
+    operations.push(batch => batch.update(socio.ref, updatePayload));
+  });
+
+  vendaItemsSnap.docs.forEach(docSnap => {
+    operations.push(batch =>
+      batch.update(docSnap.ref, {
+        vendidoPorMembroId: deleteField(),
+        updatedAt: serverTimestamp()
+      })
+    );
+  });
+
+  carnesSnap.docs.forEach(docSnap => {
+    operations.push(batch => batch.delete(docSnap.ref));
+  });
+
+  if (parcelasSnap) {
+    parcelasSnap.docs.forEach(docSnap => {
+      const data = docSnap.data() as Parcela;
+      if (!carneIds.has(data.carneId)) return;
+      operations.push(batch => batch.delete(docSnap.ref));
+    });
+  }
+
+  eventosComParticipante.forEach(evento => {
+    operations.push(batch =>
+      batch.update(evento.ref, {
+        participantes: evento.participantes,
+        updatedAt: serverTimestamp()
+      })
+    );
+  });
+
+  caixaRefs.forEach(ref => {
+    operations.push(batch =>
+      batch.update(ref, {
+        participanteEventoId: deleteField(),
+        updatedAt: serverTimestamp()
+      })
+    );
+  });
+
+  operations.push(batch => batch.delete(doc(db, 'clubs', clubId, 'desbravadores', id)));
+
+  await commitBatchOperations(operations);
+};
 
 // --- PROGRESSO ---
 export const setProgressoRequisito = (clubId: string, dbvId: string, reqId: string, payload: any) => setDoc(doc(db, 'clubs', clubId, 'desbravadores', dbvId, 'progresso', reqId), deepCleanUndefined({ ...payload, updatedAt: serverTimestamp() }), { merge: true });
@@ -1077,6 +1242,66 @@ export const atualizarPagamentoEventoCampori = async (
       updatedAt: serverTimestamp()
     }));
   }
+
+  await batch.commit();
+};
+
+export const retirarPagamentoEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const participantes = (evento.participantes || []) as EventoCamporiParticipante[];
+  const participante = participantes.find(item => item.id === participanteId);
+  if (!participante) {
+    throw new Error('Participante não encontrado no evento.');
+  }
+  if (!participante.pago) return;
+
+  const participantesAtualizados = participantes.map(item => {
+    if (item.id !== participanteId) return item;
+    return deepCleanUndefined({
+      ...item,
+      pago: false,
+      dataPagamento: undefined,
+      lancamentoCaixaId: undefined,
+      condicaoPagamentoAplicada: undefined
+    });
+  });
+
+  const caixaEventoSnap = await getDocs(
+    query(collection(db, 'clubs', clubId, 'caixa'), where('eventoCamporiId', '==', eventoId))
+  );
+
+  const caixaRefsToDelete = new Map<string, any>();
+  if (participante.lancamentoCaixaId) {
+    const ref = doc(db, 'clubs', clubId, 'caixa', participante.lancamentoCaixaId);
+    caixaRefsToDelete.set(ref.id, ref);
+  }
+
+  caixaEventoSnap.docs.forEach(docSnap => {
+    const data = docSnap.data() as LancamentoCaixa;
+    if (data.participanteEventoId !== participanteId) return;
+    caixaRefsToDelete.set(docSnap.id, docSnap.ref);
+  });
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    participantes: participantesAtualizados,
+    updatedAt: serverTimestamp()
+  }));
+
+  caixaRefsToDelete.forEach(ref => {
+    batch.delete(ref);
+  });
 
   await batch.commit();
 };

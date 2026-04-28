@@ -1309,7 +1309,7 @@ export const retirarPagamentoEventoCampori = async (
 export const adicionarSaidaEventoCampori = async (
   clubId: string,
   eventoId: string,
-  payload: Omit<EventoCamporiSaida, 'id' | 'data' | 'lancamentoCaixaId'>
+  payload: Omit<EventoCamporiSaida, 'id' | 'lancamentoCaixaId'>
 ) => {
   validateClub(clubId);
   const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
@@ -1322,12 +1322,13 @@ export const adicionarSaidaEventoCampori = async (
   const saidasAtuais = (evento.saidas || []) as EventoCamporiSaida[];
   const saidaId = doc(collection(db, 'clubs', clubId, 'caixa')).id;
   const caixaRef = doc(collection(db, 'clubs', clubId, 'caixa'));
-  const dataSaida = new Date().toISOString();
+  const dataSaida = payload.data || new Date().toISOString();
   const novaSaida: EventoCamporiSaida = {
     id: saidaId,
     descricao: payload.descricao,
     valor: Number(payload.valor || 0),
     data: dataSaida,
+    metodoPagamento: payload.metodoPagamento || 'DINHEIRO',
     lancamentoCaixaId: caixaRef.id
   };
 
@@ -1340,7 +1341,7 @@ export const adicionarSaidaEventoCampori = async (
     id: caixaRef.id,
     clubeId: clubId,
     tipo: 'SAIDA',
-    descricao: `Saída do evento ${evento.nome} - ${payload.descricao}`,
+    descricao: `Saída do evento ${evento.nome} - ${payload.descricao} (${payload.metodoPagamento || 'DINHEIRO'})`,
     categoria: 'EVENTO',
     valor: Number(payload.valor || 0),
     data: dataSaida,
@@ -1348,6 +1349,109 @@ export const adicionarSaidaEventoCampori = async (
     saidaEventoId: novaSaida.id,
     createdAt: serverTimestamp()
   }));
+
+  await batch.commit();
+};
+
+export const atualizarSaidaEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  saidaId: string,
+  payload: {
+    descricao: string;
+    valor: number;
+    data: string;
+    metodoPagamento?: EventoCamporiSaida['metodoPagamento'];
+  }
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const saidasAtuais = (evento.saidas || []) as EventoCamporiSaida[];
+  const saidaAtual = saidasAtuais.find(item => item.id === saidaId);
+  if (!saidaAtual) {
+    throw new Error('Despesa não encontrada no evento.');
+  }
+
+  const metodoPagamento = payload.metodoPagamento || 'DINHEIRO';
+  const saidasAtualizadas = saidasAtuais.map(item =>
+    item.id === saidaId
+      ? {
+          ...item,
+          descricao: payload.descricao,
+          valor: Number(payload.valor || 0),
+          data: payload.data || item.data,
+          metodoPagamento
+        }
+      : item
+  );
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    saidas: saidasAtualizadas,
+    updatedAt: serverTimestamp()
+  }));
+
+  if (saidaAtual.lancamentoCaixaId) {
+    batch.update(doc(db, 'clubs', clubId, 'caixa', saidaAtual.lancamentoCaixaId), deepCleanUndefined({
+      descricao: `Saída do evento ${evento.nome} - ${payload.descricao} (${metodoPagamento})`,
+      valor: Number(payload.valor || 0),
+      data: payload.data || saidaAtual.data,
+      updatedAt: serverTimestamp()
+    }));
+  }
+
+  await batch.commit();
+};
+
+export const removerSaidaEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  saidaId: string
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const saidasAtuais = (evento.saidas || []) as EventoCamporiSaida[];
+  const saidaAtual = saidasAtuais.find(item => item.id === saidaId);
+  if (!saidaAtual) return;
+
+  const saidasAtualizadas = saidasAtuais.filter(item => item.id !== saidaId);
+
+  const caixaEventoSnap = await getDocs(
+    query(collection(db, 'clubs', clubId, 'caixa'), where('eventoCamporiId', '==', eventoId))
+  );
+
+  const caixaRefsToDelete = new Map<string, any>();
+  if (saidaAtual.lancamentoCaixaId) {
+    const ref = doc(db, 'clubs', clubId, 'caixa', saidaAtual.lancamentoCaixaId);
+    caixaRefsToDelete.set(ref.id, ref);
+  }
+
+  caixaEventoSnap.docs.forEach(docSnap => {
+    const data = docSnap.data() as LancamentoCaixa;
+    if (data.saidaEventoId !== saidaId) return;
+    caixaRefsToDelete.set(docSnap.id, docSnap.ref);
+  });
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    saidas: saidasAtualizadas,
+    updatedAt: serverTimestamp()
+  }));
+  caixaRefsToDelete.forEach(ref => {
+    batch.delete(ref);
+  });
 
   await batch.commit();
 };

@@ -15,7 +15,12 @@ import {
   Save,
   Loader2,
   Check,
-  Copy
+  Copy,
+  ChevronDown,
+  ChevronRight,
+  FileDown,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import {
   Usuario,
@@ -26,7 +31,8 @@ import {
   Unidade,
   Desbravador,
   EventoCamporiParticipante,
-  EventoCamporiSaida
+  EventoCamporiSaida,
+  EventoCamporiMetodoPagamentoSaida
 } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
@@ -36,9 +42,11 @@ interface FinanceiroProps {
 }
 
 type TabType = 'GERAL' | 'CAMPANHAS' | 'CAMPORI' | 'SOCIOS';
+type EventoReportOption = 'FINANCEIRO_COMPLETO' | 'PENDENCIAS' | 'GERAL';
 const ACAMPAMENTO_VALOR_PADRAO = 60;
 const ACAMPAMENTO_VALOR_CONDICAO = 50;
 const ACAMPAMENTO_CONDICAO_DESCRICAO = 'Mais de 1 pessoa da mesma casa';
+const METODOS_PAGAMENTO_SAIDA: EventoCamporiMetodoPagamentoSaida[] = ['PIX', 'CARTAO_DEBITO', 'DINHEIRO'];
 
 const formatCurrency = (n: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0);
@@ -53,6 +61,33 @@ const toInputDate = (value?: string) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 const inputDateToIso = (value: string) => new Date(`${value}T12:00:00`).toISOString();
+const toInputDateTimeLocal = (value?: string) => {
+  const date = value ? new Date(value) : new Date();
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+};
+const inputDateTimeLocalToIso = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString();
+  return date.toISOString();
+};
+const escapeHtml = (value: string) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+const formatMetodoPagamentoSaida = (metodo?: EventoCamporiMetodoPagamentoSaida) => {
+  if (metodo === 'PIX') return 'Pix';
+  if (metodo === 'CARTAO_DEBITO') return 'Cartão Débito';
+  return 'Dinheiro';
+};
 
 const isEventoAcampamento = (nome?: string) => (nome || '').trim().toLowerCase().includes('acampamento');
 
@@ -70,7 +105,8 @@ const normalizeEventoSaidas = (evento: EventoCampori): EventoCamporiSaida[] => {
   return evento.saidas.map((saida) => ({
     ...saida,
     valor: Number(saida?.valor || 0),
-    data: saida?.data || new Date().toISOString()
+    data: saida?.data || new Date().toISOString(),
+    metodoPagamento: saida?.metodoPagamento || 'DINHEIRO'
   }));
 };
 
@@ -96,6 +132,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const [eventoAbertoId, setEventoAbertoId] = useState<string | null>(null);
   const [eventoSaidaDesc, setEventoSaidaDesc] = useState('');
   const [eventoSaidaValor, setEventoSaidaValor] = useState('');
+  const [eventoSaidaMetodoPagamento, setEventoSaidaMetodoPagamento] = useState<EventoCamporiMetodoPagamentoSaida>('PIX');
+  const [eventoSaidaDataTransacao, setEventoSaidaDataTransacao] = useState(toInputDateTimeLocal());
   const [isSyncingParticipantesEvento, setIsSyncingParticipantesEvento] = useState(false);
   const [savingParticipanteId, setSavingParticipanteId] = useState<string | null>(null);
   const [participanteConfirmacaoPagamentoId, setParticipanteConfirmacaoPagamentoId] = useState<string | null>(null);
@@ -107,8 +145,20 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const [edicaoPagamentoCondicaoAplicada, setEdicaoPagamentoCondicaoAplicada] = useState(false);
   const [savingEdicaoPagamentoParticipanteId, setSavingEdicaoPagamentoParticipanteId] = useState<string | null>(null);
   const [isSavingEventoSaida, setIsSavingEventoSaida] = useState(false);
-  const [copiedReportType, setCopiedReportType] = useState<'ENTRADAS' | 'DESPESAS' | null>(null);
+  const [deletingEventoSaidaId, setDeletingEventoSaidaId] = useState<string | null>(null);
+  const [editandoEventoSaidaId, setEditandoEventoSaidaId] = useState<string | null>(null);
+  const [eventoSaidaEditDesc, setEventoSaidaEditDesc] = useState('');
+  const [eventoSaidaEditValor, setEventoSaidaEditValor] = useState('');
+  const [eventoSaidaEditMetodoPagamento, setEventoSaidaEditMetodoPagamento] = useState<EventoCamporiMetodoPagamentoSaida>('PIX');
+  const [eventoSaidaEditDataTransacao, setEventoSaidaEditDataTransacao] = useState(toInputDateTimeLocal());
+  const [copiedReportType, setCopiedReportType] = useState<string | null>(null);
   const [isSavingEventoConfig, setIsSavingEventoConfig] = useState(false);
+  const [unidadesExpandidasGestaoEvento, setUnidadesExpandidasGestaoEvento] = useState<string[]>([]);
+  const [eventoReportSelections, setEventoReportSelections] = useState<Record<EventoReportOption, boolean>>({
+    FINANCEIRO_COMPLETO: false,
+    PENDENCIAS: false,
+    GERAL: true
+  });
 
   // Formulário: Caixa
   const [caixaDesc, setCaixaDesc] = useState('');
@@ -283,20 +333,69 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     if (!eventoAberto) return [] as EventoCamporiSaida[];
     return normalizeEventoSaidas(eventoAberto).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
   }, [eventoAberto]);
+  const entradasEventoOrdenadas = useMemo(() => {
+    return participantesEventoDetalhados
+      .filter((participante) => participante.pago)
+      .sort((a, b) => new Date(b.dataPagamento || 0).getTime() - new Date(a.dataPagamento || 0).getTime());
+  }, [participantesEventoDetalhados]);
 
-  const eventoRelatorioEntradasTexto = useMemo(() => {
+  const eventoRelatorioFinanceiroCompletoTexto = useMemo(() => {
+    if (!eventoAberto) return '';
+
+    const linhasDespesas = despesasEventoOrdenadas.length
+      ? despesasEventoOrdenadas
+          .map(
+            (d) =>
+              `• ${formatDate(d.data)} – ${formatMetodoPagamentoSaida(d.metodoPagamento)}\n${d.descricao}\n${formatCurrency(Number(d.valor || 0))}`
+          )
+          .join('\n\n')
+      : '• Nenhuma despesa registrada.';
+
+    return [
+      `📋  RESUMO FINANCEIRO - ${eventoAberto.nome}`,
+      ``,
+      `💵 Saldo inicial: ${formatCurrency(eventoResumoFinanceiro.totalPago)}`,
+      `💸 Total de despesas: ${formatCurrency(eventoResumoFinanceiro.totalDespesas)}`,
+      `📊 Valor restante em caixa: ${formatCurrency(eventoResumoFinanceiro.saldo)}`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `💸 DESPESAS REGISTRADAS`,
+      ``,
+      linhasDespesas,
+      ``
+    ].join('\n');
+  }, [eventoAberto, despesasEventoOrdenadas, eventoResumoFinanceiro]);
+
+  const eventoRelatorioPendenciasTexto = useMemo(() => {
+    if (!eventoAberto) return '';
+
+    const blocosPendentes = participantesPorUnidade
+      .map((grupo) => {
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago);
+        if (pendentesDaUnidade.length === 0) return '';
+        const linhas = pendentesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    return [
+      `⚠️ PENDÊNCIAS DE PAGAMENTO`,
+      ``,
+      blocosPendentes || `✅ Não há pendências de pagamento.`
+    ].join('\n');
+  }, [eventoAberto, participantesPorUnidade]);
+
+  const eventoRelatorioGeralTexto = useMemo(() => {
     if (!eventoAberto) return '';
 
     const blocosPagos = participantesPorUnidade
       .map((grupo) => {
         const pagosDaUnidade = grupo.participantes.filter((p) => p.pago);
         if (pagosDaUnidade.length === 0) return '';
-
-        const linhas = pagosDaUnidade
-          .map((p) => `- ${p.nome} - Pago - ${formatCurrency(Number(p.valor || 0))}`)
-          .join('\n');
-
-        return [`UNIDADE: ${grupo.unidadeNome}`, linhas].join('\n');
+        const linhas = pagosDaUnidade.map((p) => `• ${p.nome} – Pago – ${formatCurrency(Number(p.valor || 0))}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
       })
       .filter(Boolean)
       .join('\n\n');
@@ -305,61 +404,35 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       .map((grupo) => {
         const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago);
         if (pendentesDaUnidade.length === 0) return '';
-
-        const linhas = pendentesDaUnidade
-          .map((p) => `- ${p.nome} - Não pagou`)
-          .join('\n');
-
-        return [`UNIDADE: ${grupo.unidadeNome}`, linhas].join('\n');
+        const linhas = pendentesDaUnidade.map((p) => `• ${p.nome} – Não pagou`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
       })
       .filter(Boolean)
       .join('\n\n');
 
-    const linhasPagos = blocosPagos || '- Nenhum pagamento confirmado.';
-    const linhasPendentes = blocosPendentes || '- Todos os participantes pagaram.';
-
     return [
-      `*RELATORIO DE ENTRADAS*`,
-      `Evento: ${eventoAberto.nome}`,
-      `Data do evento: ${formatDate(eventoAberto.dataInicio)}`,
-      '',
-      `RESUMO`,
-      `- Participantes: ${eventoResumoFinanceiro.totalParticipantes}`,
-      `- Pagos: ${eventoResumoFinanceiro.totalPagosQtd}`,
-      `- Pendentes: ${eventoResumoFinanceiro.totalPendentesQtd}`,
-      `- Valor total: ${formatCurrency(eventoResumoFinanceiro.totalPrevisto)}`,
-      `- Valor pago ate agora: ${formatCurrency(eventoResumoFinanceiro.totalPago)}`,
-      '',
-      `PAGAMENTOS CONFIRMADOS`,
-      linhasPagos,
-      '',
-      `PAGAMENTOS PENDENTES`,
-      linhasPendentes
+      `💰 ENTRADAS`,
+      ``,
+      `👥 Participantes: ${eventoResumoFinanceiro.totalParticipantes}`,
+      `✅ Pagos: ${eventoResumoFinanceiro.totalPagosQtd}`,
+      `⚠️ Pendentes: ${eventoResumoFinanceiro.totalPendentesQtd}`,
+      ``,
+      `💵 Valor total previsto: ${formatCurrency(eventoResumoFinanceiro.totalPrevisto)}`,
+      `💳 Valor recebido até agora: ${formatCurrency(eventoResumoFinanceiro.totalPago)}`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `✅ PAGAMENTOS CONFIRMADOS`,
+      ``,
+      blocosPagos || `• Nenhum pagamento confirmado.`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `⚠️ PENDÊNCIAS DE PAGAMENTO`,
+      ``,
+      blocosPendentes || `• Não há pendências de pagamento.`
     ].join('\n');
   }, [eventoAberto, participantesPorUnidade, eventoResumoFinanceiro]);
-
-  const eventoRelatorioDespesasTexto = useMemo(() => {
-    if (!eventoAberto) return '';
-
-    const linhasDespesas = despesasEventoOrdenadas.length
-      ? despesasEventoOrdenadas
-          .map((d) => `- ${formatDateTime(d.data)} | ${d.descricao} | ${formatCurrency(Number(d.valor || 0))}`)
-          .join('\n')
-      : '- Nenhuma despesa registrada.';
-
-    return [
-      `*RELATORIO DE DESPESAS*`,
-      `Evento: ${eventoAberto.nome}`,
-      `Data do evento: ${formatDate(eventoAberto.dataInicio)}`,
-      '',
-      `RESUMO`,
-      `- Total de despesas: ${formatCurrency(eventoResumoFinanceiro.totalDespesas)}`,
-      `- Saldo atual (Entradas - Despesas): ${formatCurrency(eventoResumoFinanceiro.saldo)}`,
-      '',
-      `DESPESAS REGISTRADAS`,
-      linhasDespesas
-    ].join('\n');
-  }, [eventoAberto, despesasEventoOrdenadas, eventoResumoFinanceiro.totalDespesas, eventoResumoFinanceiro.saldo]);
 
   // Handlers de Submissão
   const handleSaveCaixa = async (e: React.FormEvent) => {
@@ -565,6 +638,19 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEventoAbertoId(eventoId);
     setEventoSaidaDesc('');
     setEventoSaidaValor('');
+    setEventoSaidaMetodoPagamento('PIX');
+    setEventoSaidaDataTransacao(toInputDateTimeLocal());
+    setEditandoEventoSaidaId(null);
+    setEventoSaidaEditDesc('');
+    setEventoSaidaEditValor('');
+    setEventoSaidaEditMetodoPagamento('PIX');
+    setEventoSaidaEditDataTransacao(toInputDateTimeLocal());
+    setDeletingEventoSaidaId(null);
+    setEventoReportSelections({
+      FINANCEIRO_COMPLETO: false,
+      PENDENCIAS: false,
+      GERAL: true
+    });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
     setAplicarCondicaoPagamento(false);
@@ -573,6 +659,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEdicaoPagamentoValor('');
     setEdicaoPagamentoData(toInputDate());
     setEdicaoPagamentoCondicaoAplicada(false);
+    setUnidadesExpandidasGestaoEvento([]);
 
     const evento = eventosCampori.find((item) => item.id === eventoId);
     if (evento) {
@@ -584,6 +671,19 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEventoAbertoId(null);
     setEventoSaidaDesc('');
     setEventoSaidaValor('');
+    setEventoSaidaMetodoPagamento('PIX');
+    setEventoSaidaDataTransacao(toInputDateTimeLocal());
+    setEditandoEventoSaidaId(null);
+    setEventoSaidaEditDesc('');
+    setEventoSaidaEditValor('');
+    setEventoSaidaEditMetodoPagamento('PIX');
+    setEventoSaidaEditDataTransacao(toInputDateTimeLocal());
+    setDeletingEventoSaidaId(null);
+    setEventoReportSelections({
+      FINANCEIRO_COMPLETO: false,
+      PENDENCIAS: false,
+      GERAL: true
+    });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
     setAplicarCondicaoPagamento(false);
@@ -592,6 +692,13 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEdicaoPagamentoData(toInputDate());
     setEdicaoPagamentoCondicaoAplicada(false);
     setDataPagamentoSelecionada(toInputDate());
+    setUnidadesExpandidasGestaoEvento([]);
+  };
+
+  const toggleUnidadeGestaoEventoExpandida = (unidadeKey: string) => {
+    setUnidadesExpandidasGestaoEvento((current) =>
+      current.includes(unidadeKey) ? current.filter((item) => item !== unidadeKey) : [...current, unidadeKey]
+    );
   };
 
   const handleMarcarParticipantePago = async (
@@ -763,10 +870,14 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     try {
       await fs.adicionarSaidaEventoCampori(user.clubeId, eventoAbertoId, {
         descricao: eventoSaidaDesc,
-        valor: Number(eventoSaidaValor)
+        valor: Number(eventoSaidaValor),
+        metodoPagamento: eventoSaidaMetodoPagamento,
+        data: inputDateTimeLocalToIso(eventoSaidaDataTransacao)
       });
       setEventoSaidaDesc('');
       setEventoSaidaValor('');
+      setEventoSaidaMetodoPagamento('PIX');
+      setEventoSaidaDataTransacao(toInputDateTimeLocal());
       await loadAll();
     } catch (error) {
       console.error(error);
@@ -776,7 +887,84 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     }
   };
 
-  const handleCopyReport = async (texto: string, tipo: 'ENTRADAS' | 'DESPESAS') => {
+  const iniciarEdicaoSaidaEvento = (saida: EventoCamporiSaida) => {
+    setEditandoEventoSaidaId(saida.id);
+    setEventoSaidaEditDesc(saida.descricao);
+    setEventoSaidaEditValor(String(Number(saida.valor || 0)));
+    setEventoSaidaEditMetodoPagamento(saida.metodoPagamento || 'DINHEIRO');
+    setEventoSaidaEditDataTransacao(toInputDateTimeLocal(saida.data));
+  };
+
+  const cancelarEdicaoSaidaEvento = () => {
+    setEditandoEventoSaidaId(null);
+    setEventoSaidaEditDesc('');
+    setEventoSaidaEditValor('');
+    setEventoSaidaEditMetodoPagamento('PIX');
+    setEventoSaidaEditDataTransacao(toInputDateTimeLocal());
+  };
+
+  const salvarEdicaoSaidaEvento = async (saida: EventoCamporiSaida) => {
+    if (!user.clubeId || !eventoAberto) return;
+    if (!eventoSaidaEditDesc || !eventoSaidaEditValor) {
+      alert('Preencha descrição e valor da despesa.');
+      return;
+    }
+
+    const valor = Number(eventoSaidaEditValor || 0);
+    if (Number.isNaN(valor) || valor <= 0) {
+      alert('Informe um valor válido para a despesa.');
+      return;
+    }
+
+    setIsSavingEventoSaida(true);
+    try {
+      await fs.atualizarSaidaEventoCampori(user.clubeId, eventoAberto.id, saida.id, {
+        descricao: eventoSaidaEditDesc,
+        valor,
+        metodoPagamento: eventoSaidaEditMetodoPagamento,
+        data: inputDateTimeLocalToIso(eventoSaidaEditDataTransacao)
+      });
+      cancelarEdicaoSaidaEvento();
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar despesa.');
+    } finally {
+      setIsSavingEventoSaida(false);
+    }
+  };
+
+  const removerSaidaEvento = async (saida: EventoCamporiSaida) => {
+    if (!user.clubeId || !eventoAberto) return;
+
+    const confirmed = window.confirm(
+      `Excluir a despesa "${saida.descricao}"?\n\nO lançamento de caixa vinculado também será removido.`
+    );
+    if (!confirmed) return;
+
+    setDeletingEventoSaidaId(saida.id);
+    try {
+      await fs.removerSaidaEventoCampori(user.clubeId, eventoAberto.id, saida.id);
+      if (editandoEventoSaidaId === saida.id) {
+        cancelarEdicaoSaidaEvento();
+      }
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir despesa.');
+    } finally {
+      setDeletingEventoSaidaId(null);
+    }
+  };
+
+  const toggleEventoReportSelection = (option: EventoReportOption) => {
+    setEventoReportSelections((current) => ({
+      ...current,
+      [option]: !current[option]
+    }));
+  };
+
+  const handleCopyReport = async (texto: string, tipo: string) => {
     if (!texto) return;
     try {
       await navigator.clipboard.writeText(texto);
@@ -787,6 +975,159 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       alert('Não foi possível copiar o relatório.');
     }
   };
+
+  const handleGerarPdfRelatorioEvento = () => {
+    if (!eventoAberto) return;
+
+    const entradasRows = entradasEventoOrdenadas.length
+      ? entradasEventoOrdenadas
+          .map(
+            (entrada) => `
+              <tr>
+                <td>${escapeHtml(formatDateTime(entrada.dataPagamento))}</td>
+                <td>${escapeHtml(entrada.unidadeNomeResolved || 'Sem unidade')}</td>
+                <td>${escapeHtml(entrada.nome)}</td>
+                <td style="text-align:right;">${escapeHtml(formatCurrency(Number(entrada.valor || 0)))}</td>
+              </tr>
+            `
+          )
+          .join('')
+      : '<tr><td colspan="4">Nenhuma entrada registrada.</td></tr>';
+
+    const saidasRows = despesasEventoOrdenadas.length
+      ? despesasEventoOrdenadas
+          .map(
+            (saida) => `
+              <tr>
+                <td>${escapeHtml(formatDateTime(saida.data))}</td>
+                <td>${escapeHtml(formatMetodoPagamentoSaida(saida.metodoPagamento))}</td>
+                <td>${escapeHtml(saida.descricao)}</td>
+                <td style="text-align:right;">${escapeHtml(formatCurrency(Number(saida.valor || 0)))}</td>
+              </tr>
+            `
+          )
+          .join('')
+      : '<tr><td colspan="4">Nenhuma saída registrada.</td></tr>';
+
+    const htmlRelatorio = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Extrato Financeiro - ${escapeHtml(eventoAberto.nome)}</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #0f172a; }
+            h1 { margin: 0 0 6px; font-size: 24px; }
+            h2 { margin: 24px 0 8px; font-size: 16px; }
+            p { margin: 2px 0; }
+            .resumo { margin-top: 14px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; }
+            .resumo strong { display: inline-block; min-width: 240px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; font-size: 12px; text-align: left; }
+            thead th { background: #e2e8f0; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+            .muted { color: #475569; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <h1>Extrato Financeiro do Evento</h1>
+          <p><strong>Evento:</strong> ${escapeHtml(eventoAberto.nome)}</p>
+          <p><strong>Data do evento:</strong> ${escapeHtml(formatDate(eventoAberto.dataInicio))}</p>
+          <p class="muted">Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>
+
+          <div class="resumo">
+            <p><strong>Total de entradas:</strong> ${escapeHtml(formatCurrency(eventoResumoFinanceiro.totalPago))}</p>
+            <p><strong>Total de saídas:</strong> ${escapeHtml(formatCurrency(eventoResumoFinanceiro.totalDespesas))}</p>
+            <p><strong>Saldo do evento:</strong> ${escapeHtml(formatCurrency(eventoResumoFinanceiro.saldo))}</p>
+          </div>
+
+          <h2>Entradas</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Unidade</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>${entradasRows}</tbody>
+          </table>
+
+          <h2>Saídas</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Método</th>
+                <th>Descrição</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>${saidasRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const janela = window.open('', '_blank', 'width=1100,height=800');
+    if (janela && janela.document) {
+      janela.document.write(htmlRelatorio);
+      janela.document.close();
+      setTimeout(() => {
+        janela.focus();
+        janela.print();
+      }, 300);
+      return;
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      iframe.remove();
+      alert('Não foi possível abrir a janela para gerar o PDF. Verifique o bloqueio de pop-up.');
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(htmlRelatorio);
+    iframeDoc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }, 500);
+    setTimeout(() => {
+      iframe.remove();
+    }, 60000);
+  };
+
+  const eventoRelatoriosSelecionaveis = useMemo(
+    () => [
+      {
+        key: 'FINANCEIRO_COMPLETO' as EventoReportOption,
+        titulo: 'Relatório Financeiro Completo',
+        texto: eventoRelatorioFinanceiroCompletoTexto
+      },
+      {
+        key: 'PENDENCIAS' as EventoReportOption,
+        titulo: 'Relatório de Pendências',
+        texto: eventoRelatorioPendenciasTexto
+      },
+      {
+        key: 'GERAL' as EventoReportOption,
+        titulo: 'Relatório Geral',
+        texto: eventoRelatorioGeralTexto
+      }
+    ],
+    [eventoRelatorioFinanceiroCompletoTexto, eventoRelatorioPendenciasTexto, eventoRelatorioGeralTexto]
+  );
 
   // Cálculos Gerais
   const totalEntradas = useMemo(
@@ -1126,158 +1467,171 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
             <div className="space-y-3">
               {participantesPorUnidade.map((unidadeGrupo) => (
                 <div key={unidadeGrupo.key} className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-black uppercase tracking-widest text-[#7DD3FC]">{unidadeGrupo.unidadeNome}</p>
+                  <button
+                    type="button"
+                    onClick={() => toggleUnidadeGestaoEventoExpandida(unidadeGrupo.key)}
+                    className="w-full flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      {unidadesExpandidasGestaoEvento.includes(unidadeGrupo.key) ? (
+                        <ChevronDown size={14} className="text-[#7DD3FC]" />
+                      ) : (
+                        <ChevronRight size={14} className="text-[#7DD3FC]" />
+                      )}
+                      <p className="text-xs font-black uppercase tracking-widest text-[#7DD3FC]">{unidadeGrupo.unidadeNome}</p>
+                    </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
                       {unidadeGrupo.participantes.filter((p) => p.pago).length}/{unidadeGrupo.participantes.length} pagos
                     </p>
-                  </div>
-                  <div className="space-y-2">
-                    {unidadeGrupo.participantes.map((participante) => (
-                      <div
-                        key={participante.id}
-                        className="bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2"
-                      >
-                        <div>
-                          <p className="text-sm font-bold text-white">{participante.nome}</p>
-                          <p className="text-[10px] uppercase font-black tracking-wider text-gray-500 mt-1">
-                            Valor: {formatCurrency(Number(participante.valor || 0))}
-                          </p>
-                          {participante.pago && (
-                            <p className="text-[10px] uppercase font-black tracking-wider text-[#00F5A0] mt-1">
-                              Pago em: {formatDateTime(participante.dataPagamento)}
+                  </button>
+                  {unidadesExpandidasGestaoEvento.includes(unidadeGrupo.key) && (
+                    <div className="space-y-2 mt-3">
+                      {unidadeGrupo.participantes.map((participante) => (
+                        <div
+                          key={participante.id}
+                          className="bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2"
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-white">{participante.nome}</p>
+                            <p className="text-[10px] uppercase font-black tracking-wider text-gray-500 mt-1">
+                              Valor: {formatCurrency(Number(participante.valor || 0))}
                             </p>
-                          )}
-                        </div>
-                        {participante.pago ? (
-                          <div className="space-y-2">
-                            <div className="px-3 py-1.5 rounded-lg bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0] text-[10px] uppercase font-black tracking-widest flex items-center gap-1">
-                              <Check size={12} /> {participante.condicaoPagamentoAplicada ? 'Pago (condição aplicada)' : 'Pago'}
-                            </div>
-                            {editandoPagamentoParticipanteId === participante.id ? (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Valor</label>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={edicaoPagamentoValor}
-                                    onChange={(e) => setEdicaoPagamentoValor(e.target.value)}
-                                    className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white w-24"
-                                  />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Data</label>
-                                  <input
-                                    type="date"
-                                    value={edicaoPagamentoData}
-                                    onChange={(e) => setEdicaoPagamentoData(e.target.value)}
-                                    className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white"
-                                  />
-                                </div>
-                                {eventoAbertoCondicaoAtiva && (
-                                  <label className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-gray-300">
+                            {participante.pago && (
+                              <p className="text-[10px] uppercase font-black tracking-wider text-[#00F5A0] mt-1">
+                                Pago em: {formatDateTime(participante.dataPagamento)}
+                              </p>
+                            )}
+                          </div>
+                          {participante.pago ? (
+                            <div className="space-y-2">
+                              <div className="px-3 py-1.5 rounded-lg bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0] text-[10px] uppercase font-black tracking-widest flex items-center gap-1">
+                                <Check size={12} /> {participante.condicaoPagamentoAplicada ? 'Pago (condição aplicada)' : 'Pago'}
+                              </div>
+                              {editandoPagamentoParticipanteId === participante.id ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Valor</label>
                                     <input
-                                      type="checkbox"
-                                      checked={edicaoPagamentoCondicaoAplicada}
-                                      onChange={(e) => setEdicaoPagamentoCondicaoAplicada(e.target.checked)}
-                                      className="accent-[#00B2FF]"
+                                      type="number"
+                                      step="0.01"
+                                      value={edicaoPagamentoValor}
+                                      onChange={(e) => setEdicaoPagamentoValor(e.target.value)}
+                                      className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white w-24"
                                     />
-                                    Condição aplicada
-                                  </label>
-                                )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Data</label>
+                                    <input
+                                      type="date"
+                                      value={edicaoPagamentoData}
+                                      onChange={(e) => setEdicaoPagamentoData(e.target.value)}
+                                      className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white"
+                                    />
+                                  </div>
+                                  {eventoAbertoCondicaoAtiva && (
+                                    <label className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-gray-300">
+                                      <input
+                                        type="checkbox"
+                                        checked={edicaoPagamentoCondicaoAplicada}
+                                        onChange={(e) => setEdicaoPagamentoCondicaoAplicada(e.target.checked)}
+                                        className="accent-[#00B2FF]"
+                                      />
+                                      Condição aplicada
+                                    </label>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void salvarPagamentoEditado(participante)}
+                                      disabled={savingEdicaoPagamentoParticipanteId === participante.id}
+                                      className="px-2 py-1 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
+                                    >
+                                      {savingEdicaoPagamentoParticipanteId === participante.id ? 'Salvando...' : 'Salvar'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={cancelarEdicaoPagamento}
+                                      className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
                                 <div className="flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => void salvarPagamentoEditado(participante)}
-                                    disabled={savingEdicaoPagamentoParticipanteId === participante.id}
-                                    className="px-2 py-1 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
-                                  >
-                                    {savingEdicaoPagamentoParticipanteId === participante.id ? 'Salvando...' : 'Salvar'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={cancelarEdicaoPagamento}
+                                    onClick={() => iniciarEdicaoPagamento(participante)}
                                     className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
                                   >
-                                    Cancelar
+                                    Editar pagamento
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void retirarPagamentoParticipante(participante)}
+                                    disabled={savingParticipanteId === participante.id}
+                                    className="px-2 py-1 rounded-lg border border-[#7F1D1D] text-[#FCA5A5] text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                                  >
+                                    {savingParticipanteId === participante.id ? 'Processando...' : 'Retirar pagamento'}
                                   </button>
                                 </div>
-                              </div>
-                            ) : (
+                              )}
+                            </div>
+                          ) : participanteConfirmacaoPagamentoId === participante.id ? (
+                            <div className="space-y-2">
+                              {eventoAbertoCondicaoAtiva && (
+                                <label className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-gray-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={aplicarCondicaoPagamento}
+                                    onChange={(e) => setAplicarCondicaoPagamento(e.target.checked)}
+                                    className="accent-[#00B2FF]"
+                                  />
+                                  Aplicar condição ({formatCurrency(eventoAbertoCondicaoValor)} - {eventoAberto.condicaoPagamentoDescricao || 'Condição especial'})
+                                </label>
+                              )}
                               <div className="flex items-center gap-2">
+                                <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Data pagamento</label>
+                                <input
+                                  type="date"
+                                  value={dataPagamentoSelecionada}
+                                  onChange={(e) => setDataPagamentoSelecionada(e.target.value)}
+                                  className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white"
+                                />
+                              </div>
+                              <div className="flex items-center justify-end gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => iniciarEdicaoPagamento(participante)}
-                                  className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
+                                  onClick={cancelarFluxoPagamentoParticipante}
+                                  disabled={savingParticipanteId === participante.id}
+                                  className="px-2.5 py-1.5 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
                                 >
-                                  Editar pagamento
+                                  Cancelar
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => void retirarPagamentoParticipante(participante)}
+                                  onClick={() => confirmarFluxoPagamentoParticipante(participante.id)}
                                   disabled={savingParticipanteId === participante.id}
-                                  className="px-2 py-1 rounded-lg border border-[#7F1D1D] text-[#FCA5A5] text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                                  className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
                                 >
-                                  {savingParticipanteId === participante.id ? 'Processando...' : 'Retirar pagamento'}
+                                  {savingParticipanteId === participante.id ? 'Salvando...' : 'Confirmar Pago'}
                                 </button>
                               </div>
-                            )}
-                          </div>
-                        ) : participanteConfirmacaoPagamentoId === participante.id ? (
-                          <div className="space-y-2">
-                            {eventoAbertoCondicaoAtiva && (
-                              <label className="flex items-center gap-2 text-[10px] uppercase font-black tracking-wider text-gray-300">
-                                <input
-                                  type="checkbox"
-                                  checked={aplicarCondicaoPagamento}
-                                  onChange={(e) => setAplicarCondicaoPagamento(e.target.checked)}
-                                  className="accent-[#00B2FF]"
-                                />
-                                Aplicar condição ({formatCurrency(eventoAbertoCondicaoValor)} - {eventoAberto.condicaoPagamentoDescricao || 'Condição especial'})
-                              </label>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <label className="text-[10px] uppercase font-black tracking-widest text-gray-500">Data pagamento</label>
-                              <input
-                                type="date"
-                                value={dataPagamentoSelecionada}
-                                onChange={(e) => setDataPagamentoSelecionada(e.target.value)}
-                                className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-2 py-1 text-xs text-white"
-                              />
                             </div>
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={cancelarFluxoPagamentoParticipante}
-                                disabled={savingParticipanteId === participante.id}
-                                className="px-2.5 py-1.5 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
-                              >
-                                Cancelar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => confirmarFluxoPagamentoParticipante(participante.id)}
-                                disabled={savingParticipanteId === participante.id}
-                                className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
-                              >
-                                {savingParticipanteId === participante.id ? 'Salvando...' : 'Confirmar Pago'}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => iniciarFluxoPagamentoParticipante(participante.id)}
-                            disabled={savingParticipanteId === participante.id}
-                            className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
-                          >
-                            {savingParticipanteId === participante.id ? 'Salvando...' : 'Marcar Pago'}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => iniciarFluxoPagamentoParticipante(participante.id)}
+                              disabled={savingParticipanteId === participante.id}
+                              className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
+                            >
+                              {savingParticipanteId === participante.id ? 'Salvando...' : 'Marcar Pago'}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1308,6 +1662,29 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                 className="w-full bg-[#111827] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935]"
               />
             </div>
+            <div>
+              <input
+                type="datetime-local"
+                required
+                value={eventoSaidaDataTransacao}
+                onChange={(e) => setEventoSaidaDataTransacao(e.target.value)}
+                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935]"
+              />
+            </div>
+            <div>
+              <select
+                required
+                value={eventoSaidaMetodoPagamento}
+                onChange={(e) => setEventoSaidaMetodoPagamento(e.target.value as EventoCamporiMetodoPagamentoSaida)}
+                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935]"
+              >
+                {METODOS_PAGAMENTO_SAIDA.map((metodo) => (
+                  <option key={metodo} value={metodo}>
+                    {formatMetodoPagamentoSaida(metodo)}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button type="submit" disabled={isSavingEventoSaida} className="w-full py-2.5 rounded-xl font-bold bg-[#E53935] text-white text-sm">
               {isSavingEventoSaida ? 'Salvando despesa...' : 'Adicionar Despesa'}
             </button>
@@ -1318,13 +1695,86 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
             {despesasEventoOrdenadas.length === 0 ? (
               <p className="text-xs text-gray-500">Nenhuma despesa registrada.</p>
             ) : (
-              <div className="max-h-44 overflow-y-auto space-y-2">
+              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
                 {despesasEventoOrdenadas.map((despesa) => (
-                  <div key={despesa.id} className="bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2">
-                    <p className="text-sm font-bold text-white">{despesa.descricao}</p>
-                    <p className="text-[10px] uppercase font-black tracking-wider text-gray-500 mt-1">
-                      {formatDateTime(despesa.data)} | {formatCurrency(Number(despesa.valor || 0))}
-                    </p>
+                  <div key={despesa.id} className="bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-3">
+                    {editandoEventoSaidaId === despesa.id ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={eventoSaidaEditDesc}
+                          onChange={(e) => setEventoSaidaEditDesc(e.target.value)}
+                          className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-3 py-2.5 text-sm text-white"
+                        />
+                        <div className="grid grid-cols-1 gap-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={eventoSaidaEditValor}
+                            onChange={(e) => setEventoSaidaEditValor(e.target.value)}
+                            className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-3 py-2.5 text-sm text-white"
+                          />
+                          <input
+                            type="datetime-local"
+                            value={eventoSaidaEditDataTransacao}
+                            onChange={(e) => setEventoSaidaEditDataTransacao(e.target.value)}
+                            className="w-full min-w-0 bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-3 py-2.5 text-sm text-white"
+                          />
+                          <select
+                            value={eventoSaidaEditMetodoPagamento}
+                            onChange={(e) => setEventoSaidaEditMetodoPagamento(e.target.value as EventoCamporiMetodoPagamentoSaida)}
+                            className="bg-[#0B0F1A] border border-[#1F2937] rounded-lg px-3 py-2.5 text-sm text-white"
+                          >
+                            {METODOS_PAGAMENTO_SAIDA.map((metodo) => (
+                              <option key={metodo} value={metodo}>
+                                {formatMetodoPagamentoSaida(metodo)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelarEdicaoSaidaEvento}
+                            className="px-2.5 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void salvarEdicaoSaidaEvento(despesa)}
+                            disabled={isSavingEventoSaida}
+                            className="px-2.5 py-1 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                          >
+                            {isSavingEventoSaida ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-white">{despesa.descricao}</p>
+                        <p className="text-[10px] uppercase font-black tracking-wider text-gray-500 mt-1">
+                          {formatDateTime(despesa.data)} | {formatMetodoPagamentoSaida(despesa.metodoPagamento)} | {formatCurrency(Number(despesa.valor || 0))}
+                        </p>
+                        <div className="flex items-center justify-end gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => iniciarEdicaoSaidaEvento(despesa)}
+                            className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest inline-flex items-center gap-1"
+                          >
+                            <Pencil size={11} /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void removerSaidaEvento(despesa)}
+                            disabled={deletingEventoSaidaId === despesa.id}
+                            className="px-2 py-1 rounded-lg border border-[#7F1D1D] text-[#FCA5A5] text-[10px] uppercase font-black tracking-widest inline-flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <Trash2 size={11} /> {deletingEventoSaidaId === despesa.id ? 'Excluindo...' : 'Excluir'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1332,43 +1782,60 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-black uppercase tracking-wider text-white">Relatório de Entradas</h3>
-              <button
-                type="button"
-                onClick={() => handleCopyReport(eventoRelatorioEntradasTexto, 'ENTRADAS')}
-                className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest bg-[#111827] border border-[#1F2937] px-3 py-1.5 rounded-lg text-gray-300 hover:text-white"
-              >
-                <Copy size={12} /> {copiedReportType === 'ENTRADAS' ? 'Copiado' : 'Copiar texto'}
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={eventoRelatorioEntradasTexto}
-              className="w-full h-56 bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-3 py-3 text-xs text-gray-200 focus:outline-none"
-            />
-          </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleGerarPdfRelatorioEvento}
+            className="flex items-center gap-2 text-[11px] uppercase font-black tracking-widest bg-[#111827] border border-[#1F2937] px-3 py-2 rounded-lg text-gray-300 hover:text-white"
+          >
+            <FileDown size={13} /> Gerar PDF (Extrato)
+          </button>
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-black uppercase tracking-wider text-white">Relatório de Despesas</h3>
-              <button
-                type="button"
-                onClick={() => handleCopyReport(eventoRelatorioDespesasTexto, 'DESPESAS')}
-                className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest bg-[#111827] border border-[#1F2937] px-3 py-1.5 rounded-lg text-gray-300 hover:text-white"
-              >
-                <Copy size={12} /> {copiedReportType === 'DESPESAS' ? 'Copiado' : 'Copiar texto'}
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={eventoRelatorioDespesasTexto}
-              className="w-full h-56 bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-3 py-3 text-xs text-gray-200 focus:outline-none"
-            />
+        <div className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-black uppercase tracking-wider text-white">Selecionar Relatórios</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {eventoRelatoriosSelecionaveis.map((relatorio) => (
+              <label key={relatorio.key} className="flex items-center gap-2 bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={eventoReportSelections[relatorio.key]}
+                  onChange={() => toggleEventoReportSelection(relatorio.key)}
+                  className="accent-[#00B2FF]"
+                />
+                <span className="text-xs font-bold text-gray-200">{relatorio.titulo}</span>
+              </label>
+            ))}
           </div>
         </div>
+
+        {eventoRelatoriosSelecionaveis.filter((relatorio) => eventoReportSelections[relatorio.key]).length === 0 ? (
+          <p className="text-xs text-gray-500">Marque ao menos um relatório para exibir.</p>
+        ) : (
+          <div className="space-y-4">
+            {eventoRelatoriosSelecionaveis
+              .filter((relatorio) => eventoReportSelections[relatorio.key])
+              .map((relatorio) => (
+                <div key={relatorio.key}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-white">{relatorio.titulo}</h3>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyReport(relatorio.texto, relatorio.key)}
+                      className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest bg-[#111827] border border-[#1F2937] px-3 py-1.5 rounded-lg text-gray-300 hover:text-white"
+                    >
+                      <Copy size={12} /> {copiedReportType === relatorio.key ? 'Copiado' : 'Copiar texto'}
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    value={relatorio.texto}
+                    className="w-full h-64 bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-3 py-3 text-xs text-gray-200 focus:outline-none"
+                  />
+                </div>
+              ))}
+          </div>
+        )}
       </div>
     );
   };

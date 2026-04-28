@@ -179,11 +179,14 @@ export interface EventoCamporiParticipante {
   condicaoPagamentoAplicada?: boolean;
 }
 
+export type EventoCamporiMetodoPagamentoSaida = 'PIX' | 'CARTAO_DEBITO' | 'DINHEIRO';
+
 export interface EventoCamporiSaida {
   id: string;
   descricao: string;
   valor: number;
   data: string;
+  metodoPagamento?: EventoCamporiMetodoPagamentoSaida;
   lancamentoCaixaId?: string;
 }
 

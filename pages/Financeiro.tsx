@@ -42,7 +42,7 @@ interface FinanceiroProps {
 }
 
 type TabType = 'GERAL' | 'CAMPANHAS' | 'CAMPORI' | 'SOCIOS';
-type EventoReportOption = 'FINANCEIRO_COMPLETO' | 'PENDENCIAS' | 'GERAL';
+type EventoReportOption = 'FINANCEIRO_COMPLETO' | 'PENDENCIAS' | 'GERAL' | 'NAO_VAO';
 const ACAMPAMENTO_VALOR_PADRAO = 60;
 const ACAMPAMENTO_VALOR_CONDICAO = 50;
 const ACAMPAMENTO_CONDICAO_DESCRICAO = 'Mais de 1 pessoa da mesma casa';
@@ -158,7 +158,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const [eventoReportSelections, setEventoReportSelections] = useState<Record<EventoReportOption, boolean>>({
     FINANCEIRO_COMPLETO: false,
     PENDENCIAS: false,
-    GERAL: true
+    GERAL: true,
+    NAO_VAO: false
   });
 
   // Formulário: Caixa
@@ -392,6 +393,28 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     ].join('\n');
   }, [eventoAberto, participantesPorUnidade]);
 
+  const eventoRelatorioNaoVaoTexto = useMemo(() => {
+    if (!eventoAberto) return '';
+
+    const blocosNaoVao = participantesPorUnidade
+      .map((grupo) => {
+        const naoVaoDaUnidade = grupo.participantes.filter((p) => p.naoVaiEvento);
+        if (naoVaoDaUnidade.length === 0) return '';
+        const linhas = naoVaoDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    return [
+      `🚫 NÃO VÃO AO EVENTO`,
+      ``,
+      `👥 Total: ${eventoResumoFinanceiro.totalNaoVaoQtd}`,
+      ``,
+      blocosNaoVao || `✅ Todos os participantes estão marcados como "vão ao evento".`
+    ].join('\n');
+  }, [eventoAberto, participantesPorUnidade, eventoResumoFinanceiro.totalNaoVaoQtd]);
+
   const eventoRelatorioGeralTexto = useMemo(() => {
     if (!eventoAberto) return '';
 
@@ -415,12 +438,23 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       .filter(Boolean)
       .join('\n\n');
 
+    const blocosNaoVao = participantesPorUnidade
+      .map((grupo) => {
+        const naoVaoDaUnidade = grupo.participantes.filter((p) => p.naoVaiEvento);
+        if (naoVaoDaUnidade.length === 0) return '';
+        const linhas = naoVaoDaUnidade.map((p) => `• ${p.nome} – Não vai`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
     return [
       `💰 ENTRADAS`,
       ``,
       `👥 Participantes: ${eventoResumoFinanceiro.totalParticipantes}`,
       `✅ Pagos: ${eventoResumoFinanceiro.totalPagosQtd}`,
       `⚠️ Pendentes: ${eventoResumoFinanceiro.totalPendentesQtd}`,
+      `🚫 Não vão: ${eventoResumoFinanceiro.totalNaoVaoQtd}`,
       ``,
       `💵 Valor total previsto: ${formatCurrency(eventoResumoFinanceiro.totalPrevisto)}`,
       `💳 Valor recebido até agora: ${formatCurrency(eventoResumoFinanceiro.totalPago)}`,
@@ -435,7 +469,13 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       ``,
       `⚠️ PENDÊNCIAS DE PAGAMENTO`,
       ``,
-      blocosPendentes || `• Não há pendências de pagamento.`
+      blocosPendentes || `• Não há pendências de pagamento.`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `🚫 NÃO VÃO AO EVENTO`,
+      ``,
+      blocosNaoVao || `• Ninguém foi marcado como "não vai".`
     ].join('\n');
   }, [eventoAberto, participantesPorUnidade, eventoResumoFinanceiro]);
 
@@ -656,7 +696,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEventoReportSelections({
       FINANCEIRO_COMPLETO: false,
       PENDENCIAS: false,
-      GERAL: true
+      GERAL: true,
+      NAO_VAO: false
     });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
@@ -689,7 +730,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     setEventoReportSelections({
       FINANCEIRO_COMPLETO: false,
       PENDENCIAS: false,
-      GERAL: true
+      GERAL: true,
+      NAO_VAO: false
     });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
@@ -1173,12 +1215,17 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         texto: eventoRelatorioPendenciasTexto
       },
       {
+        key: 'NAO_VAO' as EventoReportOption,
+        titulo: 'Relatório de Não Vão',
+        texto: eventoRelatorioNaoVaoTexto
+      },
+      {
         key: 'GERAL' as EventoReportOption,
         titulo: 'Relatório Geral',
         texto: eventoRelatorioGeralTexto
       }
     ],
-    [eventoRelatorioFinanceiroCompletoTexto, eventoRelatorioPendenciasTexto, eventoRelatorioGeralTexto]
+    [eventoRelatorioFinanceiroCompletoTexto, eventoRelatorioPendenciasTexto, eventoRelatorioNaoVaoTexto, eventoRelatorioGeralTexto]
   );
 
   // Cálculos Gerais

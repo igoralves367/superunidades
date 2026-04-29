@@ -96,7 +96,8 @@ const normalizeEventoParticipantes = (evento: EventoCampori): EventoCamporiParti
   return evento.participantes.map((participante) => ({
     ...participante,
     valor: Number(participante?.valor || evento.valorPadrao || 0),
-    pago: !!participante?.pago
+    pago: !!participante?.pago,
+    naoVaiEvento: !!participante?.naoVaiEvento
   }));
 };
 
@@ -299,6 +300,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     if (!eventoAberto) {
       return {
         totalParticipantes: 0,
+        totalNaoVaoQtd: 0,
         totalPagosQtd: 0,
         totalPendentesQtd: 0,
         totalPrevisto: 0,
@@ -309,17 +311,20 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     }
 
     const saidas = normalizeEventoSaidas(eventoAberto);
-    const totalParticipantes = participantesEventoDetalhados.length;
-    const totalPagosQtd = participantesEventoDetalhados.filter((p) => p.pago).length;
+    const participantesAtivos = participantesEventoDetalhados.filter((p) => !p.naoVaiEvento);
+    const totalParticipantes = participantesAtivos.length;
+    const totalNaoVaoQtd = participantesEventoDetalhados.filter((p) => p.naoVaiEvento).length;
+    const totalPagosQtd = participantesAtivos.filter((p) => p.pago).length;
     const totalPendentesQtd = totalParticipantes - totalPagosQtd;
-    const totalPrevisto = participantesEventoDetalhados.reduce((acc, p) => acc + Number(p.valor || 0), 0);
-    const totalPago = participantesEventoDetalhados
+    const totalPrevisto = participantesAtivos.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+    const totalPago = participantesAtivos
       .filter((p) => p.pago)
       .reduce((acc, p) => acc + Number(p.valor || 0), 0);
     const totalDespesas = saidas.reduce((acc, s) => acc + Number(s.valor || 0), 0);
 
     return {
       totalParticipantes,
+      totalNaoVaoQtd,
       totalPagosQtd,
       totalPendentesQtd,
       totalPrevisto,
@@ -335,7 +340,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   }, [eventoAberto]);
   const entradasEventoOrdenadas = useMemo(() => {
     return participantesEventoDetalhados
-      .filter((participante) => participante.pago)
+      .filter((participante) => participante.pago && !participante.naoVaiEvento)
       .sort((a, b) => new Date(b.dataPagamento || 0).getTime() - new Date(a.dataPagamento || 0).getTime());
   }, [participantesEventoDetalhados]);
 
@@ -372,7 +377,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
 
     const blocosPendentes = participantesPorUnidade
       .map((grupo) => {
-        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago);
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago && !p.naoVaiEvento);
         if (pendentesDaUnidade.length === 0) return '';
         const linhas = pendentesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
         return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
@@ -392,7 +397,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
 
     const blocosPagos = participantesPorUnidade
       .map((grupo) => {
-        const pagosDaUnidade = grupo.participantes.filter((p) => p.pago);
+        const pagosDaUnidade = grupo.participantes.filter((p) => p.pago && !p.naoVaiEvento);
         if (pagosDaUnidade.length === 0) return '';
         const linhas = pagosDaUnidade.map((p) => `• ${p.nome} – Pago – ${formatCurrency(Number(p.valor || 0))}`).join('\n');
         return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
@@ -402,7 +407,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
 
     const blocosPendentes = participantesPorUnidade
       .map((grupo) => {
-        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago);
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago && !p.naoVaiEvento);
         if (pendentesDaUnidade.length === 0) return '';
         const linhas = pendentesDaUnidade.map((p) => `• ${p.nome} – Não pagou`).join('\n');
         return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
@@ -489,7 +494,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           unidadeId: membro.unidadeId,
           unidadeNome,
           valor: valorPadrao,
-          pago: false
+          pago: false,
+          naoVaiEvento: false
         };
       })
       .filter((item): item is EventoCamporiParticipante => !!item);
@@ -613,7 +619,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         unidadeId: m.unidadeId,
         unidadeNome: unidadesMap.get(m.unidadeId)?.nome || 'Sem unidade',
         valor: Number(evento.valorPadrao || 0),
-        pago: false
+        pago: false,
+        naoVaiEvento: false
       }));
 
     if (novosParticipantes.length === 0) {
@@ -720,7 +727,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       await loadAll();
     } catch (error) {
       console.error(error);
-      alert('Erro ao registrar pagamento deste participante.');
+      alert(error instanceof Error ? error.message : 'Erro ao registrar pagamento deste participante.');
     } finally {
       setSavingParticipanteId(null);
     }
@@ -814,6 +821,51 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     } catch (error) {
       console.error(error);
       alert('Erro ao retirar pagamento.');
+    } finally {
+      setSavingParticipanteId(null);
+    }
+  };
+
+  const marcarParticipanteNaoVai = async (participante: EventoCamporiParticipante) => {
+    if (!user.clubeId || !eventoAberto) return;
+
+    const mensagem = participante.pago
+      ? `Marcar ${participante.nome} como "não vai ao evento"?\n\nO pagamento já lançado será retirado automaticamente.`
+      : `Marcar ${participante.nome} como "não vai ao evento"?`;
+    const confirmed = window.confirm(mensagem);
+    if (!confirmed) return;
+
+    setSavingParticipanteId(participante.id);
+    try {
+      await fs.atualizarParticipacaoEventoCampori(user.clubeId, eventoAberto.id, participante.id, true);
+      if (editandoPagamentoParticipanteId === participante.id) {
+        cancelarEdicaoPagamento();
+      }
+      if (participanteConfirmacaoPagamentoId === participante.id) {
+        cancelarFluxoPagamentoParticipante();
+      }
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao marcar participante como "não vai".');
+    } finally {
+      setSavingParticipanteId(null);
+    }
+  };
+
+  const desmarcarParticipanteNaoVai = async (participante: EventoCamporiParticipante) => {
+    if (!user.clubeId || !eventoAberto) return;
+
+    const confirmed = window.confirm(`Marcar ${participante.nome} como participante do evento novamente?`);
+    if (!confirmed) return;
+
+    setSavingParticipanteId(participante.id);
+    try {
+      await fs.atualizarParticipacaoEventoCampori(user.clubeId, eventoAberto.id, participante.id, false);
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar participação do evento.');
     } finally {
       setSavingParticipanteId(null);
     }
@@ -1459,7 +1511,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
 
         <div className="space-y-3">
           <h3 className="text-sm font-black uppercase tracking-wider text-white">
-            Participantes por Unidade ({eventoResumoFinanceiro.totalPagosQtd}/{eventoResumoFinanceiro.totalParticipantes} pagos)
+            Participantes por Unidade ({eventoResumoFinanceiro.totalPagosQtd}/{eventoResumoFinanceiro.totalParticipantes} pagos
+            {eventoResumoFinanceiro.totalNaoVaoQtd > 0 ? ` • ${eventoResumoFinanceiro.totalNaoVaoQtd} não vão` : ''})
           </h3>
           {participantesPorUnidade.length === 0 ? (
             <p className="text-xs text-gray-500">Nenhum participante neste evento.</p>
@@ -1481,7 +1534,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                       <p className="text-xs font-black uppercase tracking-widest text-[#7DD3FC]">{unidadeGrupo.unidadeNome}</p>
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                      {unidadeGrupo.participantes.filter((p) => p.pago).length}/{unidadeGrupo.participantes.length} pagos
+                      {unidadeGrupo.participantes.filter((p) => p.pago && !p.naoVaiEvento).length}/
+                      {unidadeGrupo.participantes.filter((p) => !p.naoVaiEvento).length} pagos
                     </p>
                   </button>
                   {unidadesExpandidasGestaoEvento.includes(unidadeGrupo.key) && (
@@ -1501,8 +1555,27 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                 Pago em: {formatDateTime(participante.dataPagamento)}
                               </p>
                             )}
+                            {participante.naoVaiEvento && (
+                              <p className="text-[10px] uppercase font-black tracking-wider text-amber-300 mt-1">
+                                Não vai ao evento
+                              </p>
+                            )}
                           </div>
-                          {participante.pago ? (
+                          {participante.naoVaiEvento ? (
+                            <div className="space-y-2">
+                              <div className="px-3 py-1.5 rounded-lg bg-amber-400/10 border border-amber-300/30 text-amber-300 text-[10px] uppercase font-black tracking-widest">
+                                Fora do evento
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void desmarcarParticipanteNaoVai(participante)}
+                                disabled={savingParticipanteId === participante.id}
+                                className="px-2 py-1 rounded-lg border border-[#374151] text-gray-300 text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : 'Marcar como vai'}
+                              </button>
+                            </div>
+                          ) : participante.pago ? (
                             <div className="space-y-2">
                               <div className="px-3 py-1.5 rounded-lg bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0] text-[10px] uppercase font-black tracking-widest flex items-center gap-1">
                                 <Check size={12} /> {participante.condicaoPagamentoAplicada ? 'Pago (condição aplicada)' : 'Pago'}
@@ -1619,14 +1692,24 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                               </div>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => iniciarFluxoPagamentoParticipante(participante.id)}
-                              disabled={savingParticipanteId === participante.id}
-                              className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
-                            >
-                              {savingParticipanteId === participante.id ? 'Salvando...' : 'Marcar Pago'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => iniciarFluxoPagamentoParticipante(participante.id)}
+                                disabled={savingParticipanteId === participante.id}
+                                className="px-3 py-1.5 rounded-lg bg-[#00B2FF] text-white text-[10px] uppercase font-black tracking-widest"
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : 'Marcar Pago'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void marcarParticipanteNaoVai(participante)}
+                                disabled={savingParticipanteId === participante.id}
+                                className="px-3 py-1.5 rounded-lg border border-amber-400/40 text-amber-300 text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : 'Não vai'}
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}

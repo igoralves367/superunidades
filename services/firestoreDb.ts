@@ -1130,6 +1130,9 @@ export const registrarPagamentoEventoCampori = async (
   if (!participante) {
     throw new Error('Participante não encontrado no evento.');
   }
+  if (participante.naoVaiEvento) {
+    throw new Error('Participante marcado como "não vai ao evento".');
+  }
   if (participante.pago) return;
 
   const condicaoPagamentoAtiva = Boolean(evento.condicaoPagamentoAtiva);
@@ -1207,6 +1210,9 @@ export const atualizarPagamentoEventoCampori = async (
   const participante = participantes.find(item => item.id === participanteId);
   if (!participante) {
     throw new Error('Participante não encontrado no evento.');
+  }
+  if (participante.naoVaiEvento) {
+    throw new Error('Participante marcado como "não vai ao evento".');
   }
   if (!participante.pago) {
     throw new Error('Participante ainda não está com pagamento confirmado.');
@@ -1302,6 +1308,76 @@ export const retirarPagamentoEventoCampori = async (
   caixaRefsToDelete.forEach(ref => {
     batch.delete(ref);
   });
+
+  await batch.commit();
+};
+
+export const atualizarParticipacaoEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string,
+  naoVaiEvento: boolean
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const participantes = (evento.participantes || []) as EventoCamporiParticipante[];
+  const participante = participantes.find(item => item.id === participanteId);
+  if (!participante) {
+    throw new Error('Participante não encontrado no evento.');
+  }
+
+  const participantesAtualizados = participantes.map(item => {
+    if (item.id !== participanteId) return item;
+    if (!naoVaiEvento) {
+      return {
+        ...item,
+        naoVaiEvento: false
+      };
+    }
+
+    return deepCleanUndefined({
+      ...item,
+      naoVaiEvento: true,
+      pago: false,
+      dataPagamento: undefined,
+      lancamentoCaixaId: undefined,
+      condicaoPagamentoAplicada: undefined
+    });
+  });
+
+  const batch = writeBatch(db);
+  batch.update(eventoRef, deepCleanUndefined({
+    participantes: participantesAtualizados,
+    updatedAt: serverTimestamp()
+  }));
+
+  if (naoVaiEvento && participante.pago) {
+    const caixaEventoSnap = await getDocs(
+      query(collection(db, 'clubs', clubId, 'caixa'), where('eventoCamporiId', '==', eventoId))
+    );
+
+    const caixaRefsToDelete = new Map<string, any>();
+    if (participante.lancamentoCaixaId) {
+      const ref = doc(db, 'clubs', clubId, 'caixa', participante.lancamentoCaixaId);
+      caixaRefsToDelete.set(ref.id, ref);
+    }
+
+    caixaEventoSnap.docs.forEach(docSnap => {
+      const data = docSnap.data() as LancamentoCaixa;
+      if (data.participanteEventoId !== participanteId) return;
+      caixaRefsToDelete.set(docSnap.id, docSnap.ref);
+    });
+
+    caixaRefsToDelete.forEach(ref => {
+      batch.delete(ref);
+    });
+  }
 
   await batch.commit();
 };

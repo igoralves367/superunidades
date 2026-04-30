@@ -178,6 +178,7 @@ export interface EventoCamporiParticipante {
   lancamentoCaixaId?: string;
   condicaoPagamentoAplicada?: boolean;
   naoVaiEvento?: boolean;
+  autorizacaoSaidaStatus?: 'ENTREGUE' | 'NAO_NECESSITA';
 }
 
 export type EventoCamporiMetodoPagamentoSaida = 'PIX' | 'CARTAO_DEBITO' | 'DINHEIRO';

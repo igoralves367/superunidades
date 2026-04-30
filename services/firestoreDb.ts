@@ -1347,7 +1347,8 @@ export const atualizarParticipacaoEventoCampori = async (
       pago: false,
       dataPagamento: undefined,
       lancamentoCaixaId: undefined,
-      condicaoPagamentoAplicada: undefined
+      condicaoPagamentoAplicada: undefined,
+      autorizacaoSaidaStatus: undefined
     });
   });
 
@@ -1380,6 +1381,43 @@ export const atualizarParticipacaoEventoCampori = async (
   }
 
   await batch.commit();
+};
+
+export const atualizarAutorizacaoSaidaEventoCampori = async (
+  clubId: string,
+  eventoId: string,
+  participanteId: string,
+  status?: EventoCamporiParticipante['autorizacaoSaidaStatus']
+) => {
+  validateClub(clubId);
+  const eventoRef = doc(db, 'clubs', clubId, 'campori_eventos', eventoId);
+  const eventoSnap = await getDoc(eventoRef);
+  if (!eventoSnap.exists()) {
+    throw new Error('Evento não encontrado.');
+  }
+
+  const evento = eventoSnap.data() as EventoCampori;
+  const participantes = (evento.participantes || []) as EventoCamporiParticipante[];
+  const participante = participantes.find(item => item.id === participanteId);
+  if (!participante) {
+    throw new Error('Participante não encontrado no evento.');
+  }
+  if (participante.naoVaiEvento) {
+    throw new Error('Participante marcado como "não vai ao evento".');
+  }
+
+  const participantesAtualizados = participantes.map(item => {
+    if (item.id !== participanteId) return item;
+    return deepCleanUndefined({
+      ...item,
+      autorizacaoSaidaStatus: status
+    });
+  });
+
+  await updateDoc(eventoRef, deepCleanUndefined({
+    participantes: participantesAtualizados,
+    updatedAt: serverTimestamp()
+  }));
 };
 
 export const adicionarSaidaEventoCampori = async (

@@ -42,11 +42,13 @@ interface FinanceiroProps {
 }
 
 type TabType = 'GERAL' | 'CAMPANHAS' | 'CAMPORI' | 'SOCIOS';
-type EventoReportOption = 'FINANCEIRO_COMPLETO' | 'PENDENCIAS' | 'GERAL' | 'NAO_VAO';
+type EventoReportOption = 'FINANCEIRO_COMPLETO' | 'PENDENCIAS' | 'GERAL' | 'NAO_VAO' | 'AUTORIZACAO';
+type EventoAutorizacaoSaidaStatus = EventoCamporiParticipante['autorizacaoSaidaStatus'];
 const ACAMPAMENTO_VALOR_PADRAO = 60;
 const ACAMPAMENTO_VALOR_CONDICAO = 50;
 const ACAMPAMENTO_CONDICAO_DESCRICAO = 'Mais de 1 pessoa da mesma casa';
 const METODOS_PAGAMENTO_SAIDA: EventoCamporiMetodoPagamentoSaida[] = ['PIX', 'CARTAO_DEBITO', 'DINHEIRO'];
+const AUTORIZACAO_STATUS_CICLO: EventoAutorizacaoSaidaStatus[] = ['ENTREGUE', 'NAO_NECESSITA'];
 
 const formatCurrency = (n: number) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0);
@@ -90,6 +92,21 @@ const formatMetodoPagamentoSaida = (metodo?: EventoCamporiMetodoPagamentoSaida) 
 };
 
 const isEventoAcampamento = (nome?: string) => (nome || '').trim().toLowerCase().includes('acampamento');
+const normalizeAutorizacaoSaidaStatus = (status?: EventoAutorizacaoSaidaStatus): EventoAutorizacaoSaidaStatus => {
+  if (status === 'ENTREGUE' || status === 'NAO_NECESSITA') return status;
+  return undefined;
+};
+const formatAutorizacaoSaidaStatus = (status?: EventoAutorizacaoSaidaStatus) => {
+  if (status === 'ENTREGUE') return 'Autorização entregue';
+  if (status === 'NAO_NECESSITA') return 'Não precisa de autorização';
+  return 'Autorização pendente';
+};
+const getNextAutorizacaoSaidaStatus = (status?: EventoAutorizacaoSaidaStatus): EventoAutorizacaoSaidaStatus => {
+  const currentIndex = AUTORIZACAO_STATUS_CICLO.indexOf(normalizeAutorizacaoSaidaStatus(status) as EventoAutorizacaoSaidaStatus);
+  if (currentIndex === -1) return AUTORIZACAO_STATUS_CICLO[0];
+  const nextIndex = currentIndex + 1;
+  return nextIndex >= AUTORIZACAO_STATUS_CICLO.length ? undefined : AUTORIZACAO_STATUS_CICLO[nextIndex];
+};
 
 const normalizeEventoParticipantes = (evento: EventoCampori): EventoCamporiParticipante[] => {
   if (!Array.isArray(evento.participantes)) return [];
@@ -97,7 +114,8 @@ const normalizeEventoParticipantes = (evento: EventoCampori): EventoCamporiParti
     ...participante,
     valor: Number(participante?.valor || evento.valorPadrao || 0),
     pago: !!participante?.pago,
-    naoVaiEvento: !!participante?.naoVaiEvento
+    naoVaiEvento: !!participante?.naoVaiEvento,
+    autorizacaoSaidaStatus: normalizeAutorizacaoSaidaStatus(participante?.autorizacaoSaidaStatus)
   }));
 };
 
@@ -159,7 +177,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     FINANCEIRO_COMPLETO: false,
     PENDENCIAS: false,
     GERAL: true,
-    NAO_VAO: false
+    NAO_VAO: false,
+    AUTORIZACAO: false
   });
 
   // Formulário: Caixa
@@ -304,6 +323,9 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         totalNaoVaoQtd: 0,
         totalPagosQtd: 0,
         totalPendentesQtd: 0,
+        totalAutorizacaoEntregueQtd: 0,
+        totalAutorizacaoNaoNecessitaQtd: 0,
+        totalAutorizacaoPendenteQtd: 0,
         totalPrevisto: 0,
         totalPago: 0,
         totalDespesas: 0,
@@ -317,6 +339,10 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     const totalNaoVaoQtd = participantesEventoDetalhados.filter((p) => p.naoVaiEvento).length;
     const totalPagosQtd = participantesAtivos.filter((p) => p.pago).length;
     const totalPendentesQtd = totalParticipantes - totalPagosQtd;
+    const totalAutorizacaoEntregueQtd = participantesAtivos.filter((p) => p.autorizacaoSaidaStatus === 'ENTREGUE').length;
+    const totalAutorizacaoNaoNecessitaQtd = participantesAtivos.filter((p) => p.autorizacaoSaidaStatus === 'NAO_NECESSITA').length;
+    const totalAutorizacaoPendenteQtd =
+      totalParticipantes - totalAutorizacaoEntregueQtd - totalAutorizacaoNaoNecessitaQtd;
     const totalPrevisto = participantesAtivos.reduce((acc, p) => acc + Number(p.valor || 0), 0);
     const totalPago = participantesAtivos
       .filter((p) => p.pago)
@@ -328,6 +354,9 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       totalNaoVaoQtd,
       totalPagosQtd,
       totalPendentesQtd,
+      totalAutorizacaoEntregueQtd,
+      totalAutorizacaoNaoNecessitaQtd,
+      totalAutorizacaoPendenteQtd,
       totalPrevisto,
       totalPago,
       totalDespesas,
@@ -376,9 +405,19 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const eventoRelatorioPendenciasTexto = useMemo(() => {
     if (!eventoAberto) return '';
 
-    const blocosPendentes = participantesPorUnidade
+    const blocosPendentesPagamento = participantesPorUnidade
       .map((grupo) => {
         const pendentesDaUnidade = grupo.participantes.filter((p) => !p.pago && !p.naoVaiEvento);
+        if (pendentesDaUnidade.length === 0) return '';
+        const linhas = pendentesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const blocosPendentesAutorizacao = participantesPorUnidade
+      .map((grupo) => {
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && !p.autorizacaoSaidaStatus);
         if (pendentesDaUnidade.length === 0) return '';
         const linhas = pendentesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
         return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
@@ -389,7 +428,11 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     return [
       `⚠️ PENDÊNCIAS DE PAGAMENTO`,
       ``,
-      blocosPendentes || `✅ Não há pendências de pagamento.`
+      blocosPendentesPagamento || `✅ Não há pendências de pagamento.`,
+      ``,
+      `📝 PENDÊNCIAS DE AUTORIZAÇÃO DE SAÍDA`,
+      ``,
+      blocosPendentesAutorizacao || `✅ Não há pendências de autorização de saída.`
     ].join('\n');
   }, [eventoAberto, participantesPorUnidade]);
 
@@ -448,6 +491,36 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       .filter(Boolean)
       .join('\n\n');
 
+    const blocosAutorizacaoEntregue = participantesPorUnidade
+      .map((grupo) => {
+        const entreguesDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && p.autorizacaoSaidaStatus === 'ENTREGUE');
+        if (entreguesDaUnidade.length === 0) return '';
+        const linhas = entreguesDaUnidade.map((p) => `• ${p.nome} – Entregou`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const blocosAutorizacaoNaoNecessita = participantesPorUnidade
+      .map((grupo) => {
+        const naoNecessitaDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && p.autorizacaoSaidaStatus === 'NAO_NECESSITA');
+        if (naoNecessitaDaUnidade.length === 0) return '';
+        const linhas = naoNecessitaDaUnidade.map((p) => `• ${p.nome} – Não precisa`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const blocosAutorizacaoPendente = participantesPorUnidade
+      .map((grupo) => {
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && !p.autorizacaoSaidaStatus);
+        if (pendentesDaUnidade.length === 0) return '';
+        const linhas = pendentesDaUnidade.map((p) => `• ${p.nome} – Pendente`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
     return [
       `💰 ENTRADAS`,
       ``,
@@ -455,6 +528,9 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       `✅ Pagos: ${eventoResumoFinanceiro.totalPagosQtd}`,
       `⚠️ Pendentes: ${eventoResumoFinanceiro.totalPendentesQtd}`,
       `🚫 Não vão: ${eventoResumoFinanceiro.totalNaoVaoQtd}`,
+      `📝 Autorização entregue: ${eventoResumoFinanceiro.totalAutorizacaoEntregueQtd}`,
+      `🟦 Não precisa de autorização: ${eventoResumoFinanceiro.totalAutorizacaoNaoNecessitaQtd}`,
+      `⏳ Autorização pendente: ${eventoResumoFinanceiro.totalAutorizacaoPendenteQtd}`,
       ``,
       `💵 Valor total previsto: ${formatCurrency(eventoResumoFinanceiro.totalPrevisto)}`,
       `💳 Valor recebido até agora: ${formatCurrency(eventoResumoFinanceiro.totalPago)}`,
@@ -475,7 +551,81 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       ``,
       `🚫 NÃO VÃO AO EVENTO`,
       ``,
-      blocosNaoVao || `• Ninguém foi marcado como "não vai".`
+      blocosNaoVao || `• Ninguém foi marcado como "não vai".`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `📝 AUTORIZAÇÃO DE SAÍDA`,
+      ``,
+      `✅ ENTREGOU`,
+      blocosAutorizacaoEntregue || `• Ninguém marcado como "entregou".`,
+      ``,
+      `🟦 NÃO PRECISA`,
+      blocosAutorizacaoNaoNecessita || `• Ninguém marcado como "não precisa".`,
+      ``,
+      `⏳ PENDENTE`,
+      blocosAutorizacaoPendente || `• Sem pendências de autorização.`
+    ].join('\n');
+  }, [eventoAberto, participantesPorUnidade, eventoResumoFinanceiro]);
+
+  const eventoRelatorioAutorizacaoTexto = useMemo(() => {
+    if (!eventoAberto) return '';
+
+    const blocosEntregue = participantesPorUnidade
+      .map((grupo) => {
+        const entreguesDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && p.autorizacaoSaidaStatus === 'ENTREGUE');
+        if (entreguesDaUnidade.length === 0) return '';
+        const linhas = entreguesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const blocosNaoNecessita = participantesPorUnidade
+      .map((grupo) => {
+        const naoNecessitaDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && p.autorizacaoSaidaStatus === 'NAO_NECESSITA');
+        if (naoNecessitaDaUnidade.length === 0) return '';
+        const linhas = naoNecessitaDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    const blocosPendentes = participantesPorUnidade
+      .map((grupo) => {
+        const pendentesDaUnidade = grupo.participantes.filter((p) => !p.naoVaiEvento && !p.autorizacaoSaidaStatus);
+        if (pendentesDaUnidade.length === 0) return '';
+        const linhas = pendentesDaUnidade.map((p) => `• ${p.nome}`).join('\n');
+        return [`UNIDADE: ${grupo.unidadeNome}`, '', linhas].join('\n');
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    return [
+      `📝 RELATÓRIO DE AUTORIZAÇÃO DE SAÍDA`,
+      ``,
+      `👥 Participantes ativos: ${eventoResumoFinanceiro.totalParticipantes}`,
+      `✅ Entregues: ${eventoResumoFinanceiro.totalAutorizacaoEntregueQtd}`,
+      `🟦 Não precisam: ${eventoResumoFinanceiro.totalAutorizacaoNaoNecessitaQtd}`,
+      `⏳ Pendentes: ${eventoResumoFinanceiro.totalAutorizacaoPendenteQtd}`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `✅ AUTORIZAÇÃO ENTREGUE`,
+      ``,
+      blocosEntregue || `• Ninguém marcado com autorização entregue.`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `🟦 NÃO PRECISA DE AUTORIZAÇÃO`,
+      ``,
+      blocosNaoNecessita || `• Ninguém marcado como "não precisa".`,
+      ``,
+      `━━━━━━━━━━━━━━`,
+      ``,
+      `⏳ AUTORIZAÇÃO PENDENTE`,
+      ``,
+      blocosPendentes || `• Sem pendências de autorização.`
     ].join('\n');
   }, [eventoAberto, participantesPorUnidade, eventoResumoFinanceiro]);
 
@@ -535,7 +685,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           unidadeNome,
           valor: valorPadrao,
           pago: false,
-          naoVaiEvento: false
+          naoVaiEvento: false,
+          autorizacaoSaidaStatus: undefined
         };
       })
       .filter((item): item is EventoCamporiParticipante => !!item);
@@ -660,7 +811,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         unidadeNome: unidadesMap.get(m.unidadeId)?.nome || 'Sem unidade',
         valor: Number(evento.valorPadrao || 0),
         pago: false,
-        naoVaiEvento: false
+        naoVaiEvento: false,
+        autorizacaoSaidaStatus: undefined
       }));
 
     if (novosParticipantes.length === 0) {
@@ -697,7 +849,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       FINANCEIRO_COMPLETO: false,
       PENDENCIAS: false,
       GERAL: true,
-      NAO_VAO: false
+      NAO_VAO: false,
+      AUTORIZACAO: false
     });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
@@ -731,7 +884,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       FINANCEIRO_COMPLETO: false,
       PENDENCIAS: false,
       GERAL: true,
-      NAO_VAO: false
+      NAO_VAO: false,
+      AUTORIZACAO: false
     });
     setCopiedReportType(null);
     setParticipanteConfirmacaoPagamentoId(null);
@@ -908,6 +1062,27 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     } catch (error) {
       console.error(error);
       alert('Erro ao atualizar participação do evento.');
+    } finally {
+      setSavingParticipanteId(null);
+    }
+  };
+
+  const alternarAutorizacaoSaidaParticipante = async (participante: EventoCamporiParticipante) => {
+    if (!user.clubeId || !eventoAberto || participante.naoVaiEvento) return;
+
+    const proximoStatus = getNextAutorizacaoSaidaStatus(participante.autorizacaoSaidaStatus);
+    setSavingParticipanteId(participante.id);
+    try {
+      await fs.atualizarAutorizacaoSaidaEventoCampori(
+        user.clubeId,
+        eventoAberto.id,
+        participante.id,
+        proximoStatus
+      );
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar autorização de saída.');
     } finally {
       setSavingParticipanteId(null);
     }
@@ -1220,12 +1395,23 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         texto: eventoRelatorioNaoVaoTexto
       },
       {
+        key: 'AUTORIZACAO' as EventoReportOption,
+        titulo: 'Relatório de Autorização',
+        texto: eventoRelatorioAutorizacaoTexto
+      },
+      {
         key: 'GERAL' as EventoReportOption,
         titulo: 'Relatório Geral',
         texto: eventoRelatorioGeralTexto
       }
     ],
-    [eventoRelatorioFinanceiroCompletoTexto, eventoRelatorioPendenciasTexto, eventoRelatorioNaoVaoTexto, eventoRelatorioGeralTexto]
+    [
+      eventoRelatorioFinanceiroCompletoTexto,
+      eventoRelatorioPendenciasTexto,
+      eventoRelatorioNaoVaoTexto,
+      eventoRelatorioAutorizacaoTexto,
+      eventoRelatorioGeralTexto
+    ]
   );
 
   // Cálculos Gerais
@@ -1559,7 +1745,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
         <div className="space-y-3">
           <h3 className="text-sm font-black uppercase tracking-wider text-white">
             Participantes por Unidade ({eventoResumoFinanceiro.totalPagosQtd}/{eventoResumoFinanceiro.totalParticipantes} pagos
-            {eventoResumoFinanceiro.totalNaoVaoQtd > 0 ? ` • ${eventoResumoFinanceiro.totalNaoVaoQtd} não vão` : ''})
+            {eventoResumoFinanceiro.totalNaoVaoQtd > 0 ? ` • ${eventoResumoFinanceiro.totalNaoVaoQtd} não vão` : ''}
+            {` • autorização: ${eventoResumoFinanceiro.totalAutorizacaoEntregueQtd} entregues, ${eventoResumoFinanceiro.totalAutorizacaoNaoNecessitaQtd} não precisam, ${eventoResumoFinanceiro.totalAutorizacaoPendenteQtd} pendentes`})
           </h3>
           {participantesPorUnidade.length === 0 ? (
             <p className="text-xs text-gray-500">Nenhum participante neste evento.</p>
@@ -1605,6 +1792,19 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                             {participante.naoVaiEvento && (
                               <p className="text-[10px] uppercase font-black tracking-wider text-amber-300 mt-1">
                                 Não vai ao evento
+                              </p>
+                            )}
+                            {!participante.naoVaiEvento && (
+                              <p
+                                className={`text-[10px] uppercase font-black tracking-wider mt-1 ${
+                                  participante.autorizacaoSaidaStatus === 'ENTREGUE'
+                                    ? 'text-[#00F5A0]'
+                                    : participante.autorizacaoSaidaStatus === 'NAO_NECESSITA'
+                                    ? 'text-sky-300'
+                                    : 'text-gray-500'
+                                }`}
+                              >
+                                {formatAutorizacaoSaidaStatus(participante.autorizacaoSaidaStatus)}
                               </p>
                             )}
                           </div>
@@ -1696,6 +1896,20 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                   </button>
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => void alternarAutorizacaoSaidaParticipante(participante)}
+                                disabled={savingParticipanteId === participante.id}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest disabled:opacity-50 ${
+                                  participante.autorizacaoSaidaStatus === 'ENTREGUE'
+                                    ? 'bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0]'
+                                    : participante.autorizacaoSaidaStatus === 'NAO_NECESSITA'
+                                    ? 'bg-sky-400/10 border border-sky-300/30 text-sky-300'
+                                    : 'border border-[#374151] text-gray-300'
+                                }`}
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : formatAutorizacaoSaidaStatus(participante.autorizacaoSaidaStatus)}
+                              </button>
                             </div>
                           ) : participanteConfirmacaoPagamentoId === participante.id ? (
                             <div className="space-y-2">
@@ -1737,9 +1951,23 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                   {savingParticipanteId === participante.id ? 'Salvando...' : 'Confirmar Pago'}
                                 </button>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => void alternarAutorizacaoSaidaParticipante(participante)}
+                                disabled={savingParticipanteId === participante.id}
+                                className={`w-full px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest disabled:opacity-50 ${
+                                  participante.autorizacaoSaidaStatus === 'ENTREGUE'
+                                    ? 'bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0]'
+                                    : participante.autorizacaoSaidaStatus === 'NAO_NECESSITA'
+                                    ? 'bg-sky-400/10 border border-sky-300/30 text-sky-300'
+                                    : 'border border-[#374151] text-gray-300'
+                                }`}
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : formatAutorizacaoSaidaStatus(participante.autorizacaoSaidaStatus)}
+                              </button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => iniciarFluxoPagamentoParticipante(participante.id)}
@@ -1755,6 +1983,20 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                 className="px-3 py-1.5 rounded-lg border border-amber-400/40 text-amber-300 text-[10px] uppercase font-black tracking-widest disabled:opacity-50"
                               >
                                 {savingParticipanteId === participante.id ? 'Salvando...' : 'Não vai'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void alternarAutorizacaoSaidaParticipante(participante)}
+                                disabled={savingParticipanteId === participante.id}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest disabled:opacity-50 ${
+                                  participante.autorizacaoSaidaStatus === 'ENTREGUE'
+                                    ? 'bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-[#00F5A0]'
+                                    : participante.autorizacaoSaidaStatus === 'NAO_NECESSITA'
+                                    ? 'bg-sky-400/10 border border-sky-300/30 text-sky-300'
+                                    : 'border border-[#374151] text-gray-300'
+                                }`}
+                              >
+                                {savingParticipanteId === participante.id ? 'Salvando...' : formatAutorizacaoSaidaStatus(participante.autorizacaoSaidaStatus)}
                               </button>
                             </div>
                           )}

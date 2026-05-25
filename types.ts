@@ -330,6 +330,7 @@ export interface RankingQuarter {
   ativo: boolean;
   ordem: number;
   origem: 'PADRAO' | 'CUSTOM';
+  publicMode?: 'FULL' | 'RESTRICTED';
 }
 
 export interface RankingRequirementSeed {

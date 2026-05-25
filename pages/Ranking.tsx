@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, CheckCircle2, Copy, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
 import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
@@ -7,6 +7,7 @@ import {
   buildRankingRows,
   calculateRequirementBreakdown,
   calculateRankingTotals,
+  generateUnitCode,
   getRequirementRuleLabel
 } from '../services/ranking';
 
@@ -42,6 +43,11 @@ const groupRequirements = (requirements: RankingRequirement[]) => {
 const buildPublicLink = (clubId: string) =>
   `${window.location.origin}${window.location.pathname}#ranking/${encodeURIComponent(clubId)}`;
 
+const buildUnitPublicLink = (clubSlugOrId: string, unitId: string) => {
+  const unitCode = generateUnitCode(unitId);
+  return `${window.location.origin}${window.location.pathname}#ranking/${encodeURIComponent(clubSlugOrId)}?u=${unitCode}`;
+};
+
 const allowsCompletionToggle = (requirement: RankingRequirement) =>
   requirement.ruleType === 'BOOLEAN' ||
   requirement.ruleType === 'BOOLEAN_WITH_BONUS' ||
@@ -67,6 +73,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedUnitId, setCopiedUnitId] = useState<string | null>(null);
+  const [togglingMode, setTogglingMode] = useState(false);
   const [units, setUnits] = useState<Unidade[]>([]);
   const [quarters, setQuarters] = useState<RankingQuarter[]>([]);
   const [requirements, setRequirements] = useState<RankingRequirement[]>([]);
@@ -140,6 +148,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const groupedRequirements = useMemo(() => groupRequirements(requirements), [requirements]);
   const totals = useMemo(() => calculateRankingTotals(requirements, state), [requirements, state]);
 
+  const publicMode = (selectedQuarter?.publicMode ?? 'FULL') as 'FULL' | 'RESTRICTED';
+
   const handleChange = (requirement: RankingRequirement, patch: Partial<RankingProgressEntry>) => {
     setState(prev => {
       const nextRow = {
@@ -190,6 +200,16 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     }
   };
 
+  const handleCopyUnitLink = async (unitId: string) => {
+    try {
+      await navigator.clipboard.writeText(buildUnitPublicLink(publicSlug || clubId, unitId));
+      setCopiedUnitId(unitId);
+      window.setTimeout(() => setCopiedUnitId(null), 2000);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleCloseQuarter = async () => {
     if (!clubId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
     if (!window.confirm(`Encerrar ${selectedQuarter.name}? A página pública passará a mostrar campeã e pódio desse trimestre.`)) return;
@@ -204,6 +224,23 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       alert('Erro ao encerrar trimestre.');
     } finally {
       setClosingQuarter(false);
+    }
+  };
+
+  const handleTogglePublicMode = async () => {
+    if (!clubId || !selectedQuarter || selectedQuarter.status === 'CLOSED' || togglingMode) return;
+    const newMode: 'FULL' | 'RESTRICTED' = publicMode === 'FULL' ? 'RESTRICTED' : 'FULL';
+    setTogglingMode(true);
+    try {
+      await fs.updateRankingQuarterPublicMode(clubId, selectedQuarter.id, newMode);
+      setQuarters(prev =>
+        prev.map(q => q.id === selectedQuarter.id ? { ...q, publicMode: newMode } : q)
+      );
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao alterar modo do ranking público.');
+    } finally {
+      setTogglingMode(false);
     }
   };
 
@@ -296,6 +333,24 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
             {closingQuarter ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
             {selectedQuarter?.status === 'CLOSED' ? 'Trimestre encerrado' : 'Encerrar trimestre'}
           </button>
+
+          <button
+            onClick={handleTogglePublicMode}
+            disabled={!selectedQuarter || selectedQuarter.status === 'CLOSED' || togglingMode}
+            title={publicMode === 'RESTRICTED' ? 'Modo Reta Final ativo: placar e pódio ocultos no link público' : 'Ativar Modo Reta Final: oculta placar e pódio no link público'}
+            className={`px-4 py-2 rounded-xl border text-xs font-black uppercase flex items-center gap-2 disabled:opacity-50 transition-colors ${
+              publicMode === 'RESTRICTED'
+                ? 'bg-[#FFD60A]/10 border-[#FFD60A]/40 text-[#FFD60A]'
+                : 'bg-[#111827] border-[#1F2937] text-gray-200'
+            }`}
+          >
+            {togglingMode
+              ? <Loader2 className="animate-spin" size={14} />
+              : publicMode === 'RESTRICTED' ? <EyeOff size={14} /> : <Eye size={14} />
+            }
+            {publicMode === 'RESTRICTED' ? 'Reta Final: Ativa' : 'Modo Reta Final'}
+          </button>
+
           <button
             onClick={handleCopyLink}
             className="px-4 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-xs font-black uppercase text-gray-200 flex items-center gap-2"
@@ -312,6 +367,15 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           </a>
         </div>
       </header>
+
+      {publicMode === 'RESTRICTED' && (
+        <div className="rounded-2xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 px-5 py-3 flex items-center gap-3">
+          <EyeOff size={16} className="text-[#FFD60A] shrink-0" />
+          <p className="text-sm text-[#FFD60A] font-bold">
+            Modo Reta Final ativo — o link público está ocultando pontuações e pódio. As unidades veem apenas seus requisitos pelo link individual.
+          </p>
+        </div>
+      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-6">
         <aside className="space-y-4">
@@ -393,6 +457,40 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
               ))}
               {ranking.length === 0 && (
                 <p className="text-sm text-gray-500">Nenhuma unidade elegível encontrada.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Link2 size={16} className="text-[#00B2FF]" />
+              <h2 className="font-black uppercase text-xs tracking-widest text-gray-300">Links individuais</h2>
+            </div>
+            <p className="text-[10px] text-gray-500 mb-4">Envie para cada unidade ver apenas os próprios requisitos.</p>
+            <div className="space-y-2">
+              {units.map(unit => {
+                const unitCode = generateUnitCode(unit.id);
+                const isCopied = copiedUnitId === unit.id;
+                return (
+                  <div key={unit.id} className="rounded-xl border border-[#1F2937] bg-[#0B0F1A] p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-black text-sm text-white truncate">{unit.nome}</p>
+                      <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">#{unitCode}</p>
+                    </div>
+                    <button
+                      onClick={() => handleCopyUnitLink(unit.id)}
+                      className="px-3 py-1.5 rounded-lg border border-[#1F2937] bg-[#111827] text-[10px] font-black uppercase tracking-widest text-gray-300 hover:text-white flex items-center gap-1 shrink-0 transition-colors"
+                    >
+                      {isCopied
+                        ? <><CheckCircle2 size={12} className="text-emerald-400" /> Copiado</>
+                        : <><Copy size={12} /> Link</>
+                      }
+                    </button>
+                  </div>
+                );
+              })}
+              {units.length === 0 && (
+                <p className="text-sm text-gray-500">Nenhuma unidade elegível.</p>
               )}
             </div>
           </div>

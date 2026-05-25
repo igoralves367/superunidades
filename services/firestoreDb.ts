@@ -962,6 +962,18 @@ export const updateRankingQuarterStatus = async (
   }));
 };
 
+export const updateRankingQuarterPublicMode = async (
+  clubId: string,
+  quarterId: string,
+  publicMode: 'FULL' | 'RESTRICTED'
+) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'ranking_quarters', quarterId), {
+    publicMode,
+    updatedAt: serverTimestamp()
+  });
+};
+
 export const listRankingRequirements = async (clubId: string, quarterId?: string): Promise<RankingRequirement[]> => {
   validateClub(clubId);
   const colRef = collection(db, 'clubs', clubId, 'ranking_requirements');

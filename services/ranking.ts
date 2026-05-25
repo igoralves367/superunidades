@@ -241,6 +241,18 @@ export const buildRankingProgressState = (
   }, {});
 };
 
+// Generates a stable 6-char alphanumeric code from a unit ID.
+// Uses djb2 hash so every unit gets a unique code regardless of ID format
+// (seed IDs like "unidade_brasil" and Firestore auto-IDs both work correctly).
+export const generateUnitCode = (unitId: string): string => {
+  let hash = 5381;
+  for (let i = 0; i < unitId.length; i++) {
+    hash = Math.imul((hash << 5) + hash, 1) ^ unitId.charCodeAt(i);
+    hash = hash >>> 0;
+  }
+  return hash.toString(36).toUpperCase().padStart(6, '0').slice(-6);
+};
+
 export const getRequirementRuleLabel = (ruleType: RankingRequirementRuleType) => {
   switch (ruleType) {
     case 'BOOLEAN':

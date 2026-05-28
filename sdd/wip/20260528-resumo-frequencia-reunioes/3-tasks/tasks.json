@@ -1,0 +1,133 @@
+{
+  "feature": "resumo-frequencia-reunioes",
+  "execution_strategy": "batched",
+  "stats": {
+    "total": 7,
+    "done": 3,
+    "by_layer": { "1": 4, "3": 3 }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Tipo UnitFrequencySummary + função pura buildFrequencySummary",
+      "description": "Definir a interface local UnitFrequencySummary no topo de Reunioes.tsx e implementar a função pura buildFrequencySummary(presencas, membros, unidades, todasReunioes, trimestre) fora do componente. Calcula frequência da unidade (média das % individuais dos membros, excluindo o conselheiro) e frequência do conselheiro (presenças/total). Sem marcação conta como falta; denominador = total de reuniões ativas do trimestre.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: buildFrequencySummary retorna um UnitFrequencySummary por unidade ativa",
+        "AC-2: conselheiro identificado via cargos com cargoId CONSELHEIRO e unidadeId da unidade, excluído da média",
+        "AC-3: unidade sem membros retorna unitFrequencyPct null; sem conselheiro retorna counselor* null",
+        "AC-4: membro sem registro conta como falta (denominador = totalMeetings)",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1", "US-2", "US-3"],
+      "design_decisions": ["DD-1", "DD-3", "DD-4"]
+    },
+    {
+      "id": "TASK-002",
+      "title": "Estados + toggle Agenda/Resumo + loadSummary",
+      "description": "Adicionar estados activeView, summaryQuarter (default por mês atual), summaryData, isSummaryLoading. Implementar o toggle de botões Agenda/Resumo Trimestral no topo da página e a função loadSummary que carrega presenças, desbravadores, unidades e reuniões via Promise.all e executa buildFrequencySummary. Disparar loadSummary ao abrir a aba resumo e ao mudar o trimestre.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-001"],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: toggle alterna entre visão Agenda (existente) e Resumo Trimestral",
+        "AC-2: seletor de trimestre (1-4) recarrega o resumo ao mudar",
+        "AC-3: loadSummary reutiliza listPresencasPorTrimestre, listDesbravadores, listUnidades, listReunioes sem modificá-las",
+        "AC-4: estado de loading exibido durante o carregamento",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": ["DD-2"]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Renderizar tabela de resumo por unidade",
+      "description": "Renderizar a tabela do resumo: coluna Unidade, Frequência da Unidade (% + nº de membros), Conselheiro (nome + fração + %). Aplicar cores por faixa (verde >=75%, amarelo 50-74%, vermelho <50%, cinza sem dados). Tratar estados vazios: 'Nenhuma reunião registrada neste trimestre', '—' para unidade sem membros, 'Sem conselheiro'.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-002"],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: cada unidade ativa aparece como uma linha com frequência da unidade e do conselheiro",
+        "AC-2: frequência exibida como porcentagem + nº de membros (ex: 80% (5 membros))",
+        "AC-3: cores aplicadas por faixa de frequência conforme spec",
+        "AC-4: estados vazios tratados (sem reuniões, sem membros, sem conselheiro)",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1", "US-2"],
+      "design_decisions": ["DD-2"]
+    },
+    {
+      "id": "TASK-004",
+      "title": "Testes unitários de buildFrequencySummary",
+      "description": "Cobrir buildFrequencySummary com vitest: unidade com presenças parciais, unidade sem registros (0%), unidade sem membros (null), conselheiro identificado, sem conselheiro, trimestre sem reuniões. Meta de cobertura 60% da função.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": ["TASK-001"],
+      "files": ["pages/Reunioes.test.tsx"],
+      "acceptance_criteria": [
+        "AC-1: testes cobrem os 6 cenários do spec técnico (Estratégia de Testes)",
+        "AC-2: cobertura >= 60% da função buildFrequencySummary",
+        "GATE: npx vitest run passa sem falhas"
+      ],
+      "references": ["US-1", "US-2", "US-3"],
+      "design_decisions": ["DD-1"]
+    },
+    {
+      "id": "TASK-005",
+      "title": "Code review",
+      "description": "Revisar a implementação com a skill sdd-code-reviewer: qualidade, padrões React 19 + TypeScript do projeto, clareza do cálculo e ausência de código morto.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003"],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: skill sdd-code-reviewer executada sobre o diff",
+        "AC-2: findings de alta confiança resolvidos ou justificados"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-006",
+      "title": "Performance review",
+      "description": "Verificar que não há re-renders desnecessários, que loadSummary não dispara em loop e que o cálculo lado cliente é eficiente. Confirmar que não há queries Firestore redundantes (reuso de Promise.all).",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003"],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: loadSummary dispara apenas ao abrir aba resumo e ao mudar trimestre",
+        "AC-2: nenhuma query Firestore adicional além das 4 reutilizadas"
+      ],
+      "references": [],
+      "design_decisions": ["DD-1"]
+    },
+    {
+      "id": "TASK-007",
+      "title": "Security review",
+      "description": "Verificar multi-tenant: todas as leituras usam user.clubeId. Confirmar ausência de secrets hardcoded e que a feature é somente leitura (não escreve em reunioes_presencas).",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003"],
+      "files": ["pages/Reunioes.tsx"],
+      "acceptance_criteria": [
+        "AC-1: todas as funções de serviço recebem user.clubeId",
+        "AC-2: nenhuma escrita Firestore introduzida; nenhum secret exposto"
+      ],
+      "references": [],
+      "design_decisions": []
+    }
+  ]
+}

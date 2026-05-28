@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, CalendarClock, Plus, Save, Clock, Trash2, ExternalLink } from 'lucide-react';
-import { Usuario, Reuniao } from '../types';
+import { Usuario, Reuniao, Cargo } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
 import { Unidade, Desbravador, ReuniaoPresenca } from '../types';
@@ -9,11 +9,100 @@ interface ReunioesProps {
   user: Usuario;
 }
 
+interface UnitFrequencySummary {
+  unidadeId: string;
+  unidadeNome: string;
+  memberCount: number;
+  unitFrequencyPct: number | null;
+  counselorId: string | null;
+  counselorNome: string | null;
+  counselorPresent: number | null;
+  counselorTotal: number | null;
+  counselorFrequencyPct: number | null;
+  totalMeetings: number;
+}
+
+function buildFrequencySummary(
+  presencas: ReuniaoPresenca[],
+  membros: Desbravador[],
+  unidades: Unidade[],
+  todasReunioes: Reuniao[],
+  trimestre: number,
+  cargos: Cargo[]
+): UnitFrequencySummary[] {
+  const conselheiroCargoIds = new Set(
+    cargos.filter(c => c.tipo === 'CONSELHEIRO').map(c => c.id)
+  );
+
+  const reunioesTrimestre = todasReunioes.filter(
+    r => r.trimestre === trimestre && r.ativo
+  );
+  const totalMeetings = reunioesTrimestre.length;
+  const reuniaoIds = new Set(reunioesTrimestre.map(r => r.id));
+
+  const presencasTrimestre = presencas.filter(p => reuniaoIds.has(p.reuniaoId));
+  const membrosAtivos = membros.filter(m => m.status === 'ATIVO');
+
+  return unidades
+    .filter(u => u.ativo)
+    .map(unidade => {
+      const conselheiro = membrosAtivos.find(m =>
+        m.cargos?.some(
+          c => conselheiroCargoIds.has(c.cargoId) && c.unidadeId === unidade.id
+        )
+      ) ?? null;
+
+      const membrosUnidade = membrosAtivos.filter(
+        m => m.unidadeId === unidade.id && m.id !== conselheiro?.id
+      );
+
+      let unitFrequencyPct: number | null = null;
+      if (membrosUnidade.length > 0 && totalMeetings > 0) {
+        const sumPct = membrosUnidade.reduce((acc, m) => {
+          const presente = presencasTrimestre.filter(
+            p => p.desbravadorId === m.id && p.presente
+          ).length;
+          return acc + (presente / totalMeetings) * 100;
+        }, 0);
+        unitFrequencyPct = Math.round(sumPct / membrosUnidade.length);
+      }
+
+      let counselorPresent: number | null = null;
+      let counselorFrequencyPct: number | null = null;
+      if (conselheiro && totalMeetings > 0) {
+        counselorPresent = presencasTrimestre.filter(
+          p => p.desbravadorId === conselheiro.id && p.presente
+        ).length;
+        counselorFrequencyPct = Math.round((counselorPresent / totalMeetings) * 100);
+      }
+
+      return {
+        unidadeId: unidade.id,
+        unidadeNome: unidade.nome,
+        memberCount: membrosUnidade.length,
+        unitFrequencyPct,
+        counselorId: conselheiro?.id ?? null,
+        counselorNome: conselheiro?.nome ?? null,
+        counselorPresent,
+        counselorTotal: conselheiro ? totalMeetings : null,
+        counselorFrequencyPct,
+        totalMeetings,
+      };
+    });
+}
+
+function freqColor(pct: number | null): string {
+  if (pct === null) return 'text-gray-400';
+  if (pct >= 75) return 'text-[#00F5A0]';
+  if (pct >= 50) return 'text-yellow-400';
+  return 'text-[#E53935]';
+}
+
 export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [reunioes, setReunioes] = useState<Reuniao[]>([]);
   const [clubSlug, setClubSlug] = useState('');
-  
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -25,6 +114,15 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   const [reportReuniao, setReportReuniao] = useState<Reuniao | null>(null);
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [reportData, setReportData] = useState<{presencas: ReuniaoPresenca[], membros: Desbravador[], unidades: Unidade[]} | null>(null);
+
+  // States do Resumo Trimestral
+  const [activeView, setActiveView] = useState<'agenda' | 'resumo'>('agenda');
+  const [summaryQuarter, setSummaryQuarter] = useState<1 | 2 | 3 | 4>(() => {
+    const m = new Date().getMonth();
+    return (Math.floor(m / 3) + 1) as 1 | 2 | 3 | 4;
+  });
+  const [summaryData, setSummaryData] = useState<UnitFrequencySummary[] | null>(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
 
   const loadData = async () => {
     if (!user.clubeId) return;
@@ -43,17 +141,44 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     }
   };
 
+  const loadSummary = async () => {
+    if (!user.clubeId) return;
+    setIsSummaryLoading(true);
+    try {
+      const [presencas, membros, unidades, todasReunioes, cargos] = await Promise.all([
+        fs.listPresencasPorTrimestre(user.clubeId, summaryQuarter),
+        fs.listDesbravadores(user.clubeId),
+        fs.listUnidades(user.clubeId),
+        fs.listReunioes(user.clubeId),
+        fs.listCargos(user.clubeId),
+      ]);
+      const result = buildFrequencySummary(
+        presencas, membros, unidades, todasReunioes, summaryQuarter, cargos
+      );
+      setSummaryData(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
-    // Definir default do trimestre baseado no mes atual
     const month = new Date().getMonth();
     setNewQuarter(Math.floor(month / 3) + 1 as 1|2|3|4);
   }, [user.clubeId]);
 
+  useEffect(() => {
+    if (activeView === 'resumo') {
+      loadSummary();
+    }
+  }, [activeView, summaryQuarter]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newData || !user.clubeId) return;
-    
+
     setIsSaving(true);
     try {
       await fs.createReuniao(user.clubeId, {
@@ -117,9 +242,9 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   }
 
   const publicLink = `${window.location.origin}/#agenda/${clubSlug}`;
-
-  // Agrupar e garantir que tem de todo os trimetres
   const trimestres = [1, 2, 3, 4] as const;
+
+  const totalMeetingsSummary = summaryData?.[0]?.totalMeetings ?? 0;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -132,9 +257,9 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
             Controle os dias de reunião para disponibilizar a agenda pública de presença.
           </p>
         </div>
-        
+
         <div className="flex flex-col gap-2 md:items-end">
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="px-6 py-2.5 rounded-xl font-bold bg-[#E53935] text-white shadow-[0_0_15px_rgba(229,57,53,0.3)] hover:opacity-90 flex items-center justify-center gap-2 transition-all"
           >
@@ -151,51 +276,190 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
         </div>
       </header>
 
-      {trimestres.map(trimestre => {
-        const reusTrimestre = reunioes.filter(r => r.trimestre === trimestre);
-        if (reusTrimestre.length === 0) return null;
+      {/* Toggle Agenda / Resumo Trimestral */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveView('agenda')}
+          className={`px-5 py-2 rounded-xl font-bold text-sm transition-all ${
+            activeView === 'agenda'
+              ? 'bg-[#E53935] text-white shadow-[0_0_12px_rgba(229,57,53,0.3)]'
+              : 'border border-[#1F2937] bg-[#111827] text-gray-400 hover:text-white hover:border-[#E53935]/40'
+          }`}
+        >
+          Agenda
+        </button>
+        <button
+          onClick={() => setActiveView('resumo')}
+          className={`px-5 py-2 rounded-xl font-bold text-sm transition-all ${
+            activeView === 'resumo'
+              ? 'bg-[#E53935] text-white shadow-[0_0_12px_rgba(229,57,53,0.3)]'
+              : 'border border-[#1F2937] bg-[#111827] text-gray-400 hover:text-white hover:border-[#E53935]/40'
+          }`}
+        >
+          Resumo Trimestral
+        </button>
+      </div>
 
-        return (
-          <section key={trimestre} className="mb-8">
-            <h2 className="text-lg font-black text-white/90 border-b border-[#1F2937] pb-2 mb-4 tracking-tighter uppercase">
-              {trimestre}º Trimestre
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {reusTrimestre.map(reuniao => (
-                <div 
-                  key={reuniao.id} 
-                  onClick={() => handleReportClick(reuniao)}
-                  className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-4 flex flex-col justify-between group h-32 relative overflow-hidden cursor-pointer hover:border-[#E53935]/30 transition-colors"
-                >
-                   <div className="absolute top-0 right-0 w-16 h-16 bg-[#111827] rounded-bl-full -z-10 group-hover:scale-110 group-hover:bg-[#E53935]/10 transition-transform duration-300 pointer-events-none"></div>
+      {/* Visão Agenda */}
+      {activeView === 'agenda' && (
+        <>
+          {trimestres.map(trimestre => {
+            const reusTrimestre = reunioes.filter(r => r.trimestre === trimestre);
+            if (reusTrimestre.length === 0) return null;
 
-                   <div>
-                    <div className="flex items-center gap-2 text-[#E53935] font-bold text-sm mb-1">
-                      <Clock size={14} /> {reuniao.data.split('-').reverse().join('/')}
+            return (
+              <section key={trimestre} className="mb-8">
+                <h2 className="text-lg font-black text-white/90 border-b border-[#1F2937] pb-2 mb-4 tracking-tighter uppercase">
+                  {trimestre}º Trimestre
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {reusTrimestre.map(reuniao => (
+                    <div
+                      key={reuniao.id}
+                      onClick={() => handleReportClick(reuniao)}
+                      className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-4 flex flex-col justify-between group h-32 relative overflow-hidden cursor-pointer hover:border-[#E53935]/30 transition-colors"
+                    >
+                       <div className="absolute top-0 right-0 w-16 h-16 bg-[#111827] rounded-bl-full -z-10 group-hover:scale-110 group-hover:bg-[#E53935]/10 transition-transform duration-300 pointer-events-none"></div>
+
+                       <div>
+                        <div className="flex items-center gap-2 text-[#E53935] font-bold text-sm mb-1">
+                          <Clock size={14} /> {reuniao.data.split('-').reverse().join('/')}
+                        </div>
+                        <p className="font-black text-white text-lg leading-tight truncate">
+                          {reuniao.titulo}
+                        </p>
+                       </div>
+
+                       <button
+                        onClick={(e) => handleDelete(reuniao.id, e)}
+                        className="absolute bottom-4 right-4 p-2 text-gray-500 hover:text-red-500 bg-[#111827] rounded-lg opacity-0 group-hover:opacity-100 transition-all border border-[#1F2937] hover:border-red-500/50"
+                      >
+                        <Trash2 size={16} />
+                       </button>
                     </div>
-                    <p className="font-black text-white text-lg leading-tight truncate">
-                      {reuniao.titulo}
-                    </p>
-                   </div>
-
-                   <button 
-                    onClick={(e) => handleDelete(reuniao.id, e)}
-                    className="absolute bottom-4 right-4 p-2 text-gray-500 hover:text-red-500 bg-[#111827] rounded-lg opacity-0 group-hover:opacity-100 transition-all border border-[#1F2937] hover:border-red-500/50"
-                  >
-                    <Trash2 size={16} />
-                   </button>
+                  ))}
                 </div>
+              </section>
+            );
+          })}
+
+          {reunioes.length === 0 && (
+            <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
+              <CalendarClock size={40} className="mx-auto text-gray-600 mb-4" />
+              <p className="text-gray-400 font-bold">Nenhuma reunião cadastrada.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Visão Resumo Trimestral */}
+      {activeView === 'resumo' && (
+        <section className="space-y-4">
+          {/* Seletor de trimestre */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-black uppercase tracking-widest text-gray-500">Trimestre</span>
+            <div className="flex gap-2">
+              {([1, 2, 3, 4] as const).map(q => (
+                <button
+                  key={q}
+                  onClick={() => setSummaryQuarter(q)}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all ${
+                    summaryQuarter === q
+                      ? 'bg-[#E53935] text-white'
+                      : 'border border-[#1F2937] bg-[#111827] text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {q}º
+                </button>
               ))}
             </div>
-          </section>
-        );
-      })}
+          </div>
 
-      {reunioes.length === 0 && (
-        <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
-          <CalendarClock size={40} className="mx-auto text-gray-600 mb-4" />
-          <p className="text-gray-400 font-bold">Nenhuma reunião cadastrada.</p>
-        </div>
+          {isSummaryLoading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="animate-spin text-[#E53935]" size={32} />
+            </div>
+          ) : summaryData && summaryData.length > 0 ? (
+            <>
+              {totalMeetingsSummary === 0 ? (
+                <div className="text-center py-16 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
+                  <CalendarClock size={36} className="mx-auto text-gray-600 mb-3" />
+                  <p className="text-gray-400 font-bold">Nenhuma reunião registrada neste trimestre.</p>
+                </div>
+              ) : (
+                <div className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-[#1F2937] flex items-center justify-between">
+                    <h2 className="font-black text-white uppercase tracking-tight">
+                      {summaryQuarter}º Trimestre
+                    </h2>
+                    <span className="text-xs font-bold text-gray-500">
+                      {totalMeetingsSummary} {totalMeetingsSummary === 1 ? 'reunião' : 'reuniões'} no período
+                    </span>
+                  </div>
+
+                  {/* Cabeçalho da tabela */}
+                  <div className="hidden md:grid grid-cols-3 px-5 py-2 border-b border-[#1F2937] text-[10px] uppercase tracking-widest font-black text-gray-500">
+                    <span>Unidade</span>
+                    <span>Frequência da Unidade</span>
+                    <span>Conselheiro</span>
+                  </div>
+
+                  {/* Linhas */}
+                  <div className="divide-y divide-[#1F2937]">
+                    {summaryData.map(row => (
+                      <div key={row.unidadeId} className="grid grid-cols-1 md:grid-cols-3 px-5 py-3 gap-2 md:gap-0 items-center">
+                        {/* Unidade */}
+                        <span className="font-black text-white uppercase text-sm truncate">
+                          {row.unidadeNome}
+                        </span>
+
+                        {/* Frequência da Unidade */}
+                        <div className="flex items-center gap-2">
+                          {row.unitFrequencyPct === null ? (
+                            <span className="text-gray-500 font-bold text-sm">— sem membros</span>
+                          ) : (
+                            <>
+                              <span className={`font-black text-lg ${freqColor(row.unitFrequencyPct)}`}>
+                                {row.unitFrequencyPct}%
+                              </span>
+                              <span className="text-gray-500 text-xs font-bold">
+                                ({row.memberCount} {row.memberCount === 1 ? 'membro' : 'membros'})
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Conselheiro */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {row.counselorNome === null ? (
+                            <span className="text-gray-500 font-bold text-sm">Sem conselheiro</span>
+                          ) : (
+                            <>
+                              <span className="text-gray-300 font-bold text-sm truncate max-w-[120px]">
+                                {row.counselorNome}
+                              </span>
+                              <span className="text-gray-500 font-bold text-xs">
+                                {row.counselorPresent}/{row.counselorTotal}
+                              </span>
+                              <span className={`font-black text-sm ${freqColor(row.counselorFrequencyPct)}`}>
+                                {row.counselorFrequencyPct}%
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-16 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
+              <CalendarClock size={36} className="mx-auto text-gray-600 mb-3" />
+              <p className="text-gray-400 font-bold">Nenhuma unidade ativa encontrada.</p>
+            </div>
+          )}
+        </section>
       )}
 
       {/* Modal Nova Reuniao */}
@@ -203,8 +467,8 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Data</label>
-            <input 
-              type="date" 
+            <input
+              type="date"
               required
               value={newData}
               onChange={e => setNewData(e.target.value)}
@@ -214,8 +478,8 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
 
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Título (Opcional)</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={newTitulo}
               onChange={e => setNewTitulo(e.target.value)}
               placeholder="Ex: Reunião Reguar"
@@ -239,16 +503,16 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
               disabled={isSaving}
               className="flex-1 py-3 rounded-xl font-bold bg-[#111827] text-gray-400 border border-[#1F2937] hover:bg-[#1F2937] transition-all"
             >
               Cancelar
             </button>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={isSaving || !newData}
               className="flex-1 py-3 rounded-xl font-bold bg-[#E53935] text-white shadow-[0_0_15px_rgba(229,57,53,0.3)] hover:opacity-90 transition-all flex items-center justify-center gap-2"
             >
@@ -267,12 +531,12 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
         ) : (
           <div className="space-y-4">
             <h4 className="text-xl font-black text-white">{reportReuniao?.titulo || 'Reunião'} - {reportReuniao?.data.split('-').reverse().join('/')}</h4>
-            
+
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               {reportData.unidades.map(u => {
                 const membrosUni = reportData.membros.filter(m => m.unidadeId === u.id);
                 if (membrosUni.length === 0) return null;
-                
+
                 let presentes = 0;
                 let faltantes = 0;
                 let vazios = 0;
@@ -305,7 +569,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
                 </div>
               </div>
             </div>
-            
+
             <button onClick={() => setReportReuniao(null)} className="w-full mt-4 py-3 bg-[#111827] border border-[#1F2937] rounded-xl font-bold text-white hover:bg-gray-800">
               Correto
             </button>

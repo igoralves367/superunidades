@@ -28,6 +28,7 @@ import {
   CampanhaVenda,
   EventoCampori,
   Socio,
+  PagamentoSocio,
   Unidade,
   Desbravador,
   EventoCamporiParticipante,
@@ -129,6 +130,41 @@ const normalizeEventoSaidas = (evento: EventoCampori): EventoCamporiSaida[] => {
   }));
 };
 
+function getCurrentMesRef(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMesRef(mesRef: string): string {
+  const [year, month] = mesRef.split('-');
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${meses[parseInt(month) - 1]}/${year}`;
+}
+
+function socioEstaEmDia(socioId: string, mesRef: string, pagamentos: PagamentoSocio[]): boolean {
+  return pagamentos.some(p => p.socioId === socioId && p.mesReferencia === mesRef);
+}
+
+function getUltimosMeses(n: number): string[] {
+  const meses: string[] = [];
+  const now = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return meses;
+}
+
+function addMonths(mesRef: string, n: number): string {
+  const [year, month] = mesRef.split('-').map(Number);
+  const d = new Date(year, month - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMesesRange(mesInicio: string, qtd: number): string[] {
+  return Array.from({ length: qtd }, (_, i) => addMonths(mesInicio, i));
+}
+
 export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<TabType>('GERAL');
   const [loading, setLoading] = useState(true);
@@ -210,6 +246,26 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   // Formulário: Sócio
   const [socioNome, setSocioNome] = useState('');
   const [socioValor, setSocioValor] = useState('');
+  const [socioMesIngresso, setSocioMesIngresso] = useState(getCurrentMesRef());
+  const [socioUnidadeId, setSocioUnidadeId] = useState('');
+  const [socioIndicadoPorId, setSocioIndicadoPorId] = useState('');
+
+  // Sócios — controle de mensalidades
+  const [pagamentosSocios, setPagamentosSocios] = useState<PagamentoSocio[]>([]);
+  const [socioSubTab, setSocioSubTab] = useState<'LISTA' | 'POR_UNIDADE'>('LISTA');
+  const [mesFiltroSocios, setMesFiltroSocios] = useState<string>(getCurrentMesRef());
+  const [isPagamentoSocioModalOpen, setIsPagamentoSocioModalOpen] = useState(false);
+  const [socioSelecionado, setSocioSelecionado] = useState<Socio | null>(null);
+  const [pagDataPagamento, setPagDataPagamento] = useState(toInputDate());
+  const [pagValorInput, setPagValorInput] = useState('');
+  const [pagMesRef, setPagMesRef] = useState(getCurrentMesRef());
+  const [pagObservacao, setPagObservacao] = useState('');
+  const [pagQtdParcelas, setPagQtdParcelas] = useState(1);
+  const [sociosExpandidos, setSociosExpandidos] = useState<Set<string>>(new Set());
+  const [deletingPagamentoId, setDeletingPagamentoId] = useState<string | null>(null);
+  const [editingSocio, setEditingSocio] = useState<Socio | null>(null);
+  const [deletingSocioId, setDeletingSocioId] = useState<string | null>(null);
+  const [editingPagamento, setEditingPagamento] = useState<PagamentoSocio | null>(null);
 
   const membrosAtivos = useMemo(
     () => desbravadores.filter((m) => m.status === 'ATIVO').sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
@@ -234,13 +290,14 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const loadAll = async () => {
     if (!user.clubeId) return;
     try {
-      const [fCaixa, fCampanhas, fEventos, fSocios, fUnidades, fDesbravadores] = await Promise.all([
+      const [fCaixa, fCampanhas, fEventos, fSocios, fUnidades, fDesbravadores, fPagamentosSocios] = await Promise.all([
         fs.listLancamentosCaixa(user.clubeId),
         fs.listCampanhasVenda(user.clubeId),
         fs.listEventosCampori(user.clubeId),
         fs.listSocios(user.clubeId),
         fs.listUnidades(user.clubeId),
-        fs.listDesbravadores(user.clubeId)
+        fs.listDesbravadores(user.clubeId),
+        fs.listPagamentosSocios(user.clubeId)
       ]);
       setCaixa(fCaixa.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()));
       setCampanhas(fCampanhas);
@@ -257,6 +314,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       setSocios(fSocios);
       setUnidades(fUnidades.filter((u) => u.ativo !== false));
       setDesbravadores(fDesbravadores);
+      setPagamentosSocios(fPagamentosSocios);
     } catch (e) {
       console.error('Erro ao carregar dados financeiros', e);
     }
@@ -751,20 +809,115 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     if (!user.clubeId || !socioNome || !socioValor) return;
     setIsSaving(true);
     try {
-      await fs.createSocio(user.clubeId, {
-        nome: socioNome,
-        valorMensal: parseFloat(socioValor),
-        ativo: true
-      });
+      if (editingSocio) {
+        await fs.updateSocio(user.clubeId, editingSocio.id, {
+          nome: socioNome,
+          valorMensal: parseFloat(socioValor),
+          mesIngresso: socioMesIngresso || undefined,
+          unidadeId: socioUnidadeId || undefined,
+          indicadoPorMembroId: socioIndicadoPorId || undefined,
+        });
+      } else {
+        await fs.createSocio(user.clubeId, {
+          nome: socioNome,
+          valorMensal: parseFloat(socioValor),
+          ativo: true,
+          mesIngresso: socioMesIngresso || undefined,
+          ...(socioUnidadeId ? { unidadeId: socioUnidadeId } : {}),
+          ...(socioIndicadoPorId ? { indicadoPorMembroId: socioIndicadoPorId } : {}),
+        });
+      }
       setIsSocioModalOpen(false);
+      setEditingSocio(null);
       setSocioNome('');
       setSocioValor('');
+      setSocioMesIngresso(getCurrentMesRef());
+      setSocioUnidadeId('');
+      setSocioIndicadoPorId('');
       await loadAll();
     } catch {
       alert('Erro ao salvar sócio');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDeleteSocio = async (socio: Socio) => {
+    if (!user.clubeId || deletingSocioId) return;
+    if (!window.confirm(`Remover "${socio.nome}" dos sócios? Esta ação é reversível.`)) return;
+    setDeletingSocioId(socio.id);
+    try {
+      await fs.updateSocio(user.clubeId, socio.id, { ativo: false });
+      await loadAll();
+    } catch {
+      alert('Erro ao remover sócio');
+    } finally {
+      setDeletingSocioId(null);
+    }
+  };
+
+  const handleRegistrarPagamentoSocio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user.clubeId || !socioSelecionado || !pagValorInput || !pagMesRef) return;
+    setIsSaving(true);
+    try {
+      if (editingPagamento) {
+        await fs.updatePagamentoSocio(user.clubeId, editingPagamento.id, {
+          dataPagamento: pagDataPagamento,
+          valorPago: parseFloat(pagValorInput),
+          observacao: pagObservacao || undefined,
+        });
+      } else {
+        const meses = getMesesRange(pagMesRef, pagQtdParcelas);
+        const jaPagos = new Set(
+          pagamentosSocios.filter(p => p.socioId === socioSelecionado.id).map(p => p.mesReferencia)
+        );
+        const mesesNovos = meses.filter(m => !jaPagos.has(m));
+        await Promise.all(mesesNovos.map(mes =>
+          fs.createPagamentoSocio(user.clubeId!, {
+            socioId: socioSelecionado!.id,
+            dataPagamento: pagDataPagamento,
+            valorPago: parseFloat(pagValorInput),
+            mesReferencia: mes,
+            ...(pagObservacao ? { observacao: pagObservacao } : {})
+          })
+        ));
+      }
+      setIsPagamentoSocioModalOpen(false);
+      setSocioSelecionado(null);
+      setEditingPagamento(null);
+      setPagDataPagamento(toInputDate());
+      setPagValorInput('');
+      setPagMesRef(getCurrentMesRef());
+      setPagObservacao('');
+      setPagQtdParcelas(1);
+      await loadAll();
+    } catch {
+      alert('Erro ao registrar pagamento');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeletePagamentoSocio = async (id: string) => {
+    if (!user.clubeId) return;
+    setDeletingPagamentoId(id);
+    try {
+      await fs.deletePagamentoSocio(user.clubeId, id);
+      await loadAll();
+    } catch {
+      alert('Erro ao remover pagamento');
+    } finally {
+      setDeletingPagamentoId(null);
+    }
+  };
+
+  const toggleSocioExpandido = (id: string) => {
+    setSociosExpandidos(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   const toggleParticipanteSelecao = (id: string) => {
@@ -2273,56 +2426,341 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     </div>
   );
 
-  const renderSocios = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-center bg-[#111827] border border-[#1F2937] p-5 rounded-[24px]">
-        <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <Users className="text-[#FFD60A]" /> Sócios / Contribuintes
-          </h2>
-          <p className="text-xs text-gray-400 mt-1 font-bold">Gerencie patrocinadores vinculados aos desbravadores ou a diretoria.</p>
-        </div>
-        <button
-          onClick={() => setIsSocioModalOpen(true)}
-          className="flex items-center gap-2 bg-[#FFD60A] text-black px-4 py-2 rounded-xl text-sm font-black shadow-[0_0_15px_rgba(255,214,10,0.3)] hover:opacity-90"
-        >
-          <Plus size={16} /> Novo Sócio
-        </button>
-      </div>
+  const renderSocios = () => {
+    const sociosAtivos = socios.filter(s => s.ativo !== false);
+    const sociosAtivosIds = new Set(sociosAtivos.map(s => s.id));
+    const pagamentosMes = pagamentosSocios.filter(p => p.mesReferencia === mesFiltroSocios && sociosAtivosIds.has(p.socioId));
+    // Deduplica: conta apenas 1 pagamento por sócio por mês (igual ao que o histórico exibe com .find)
+    const sociosComPagamento = new Set<string>();
+    const totalArrecadado = pagamentosMes.reduce((acc, p) => {
+      if (sociosComPagamento.has(p.socioId)) return acc;
+      sociosComPagamento.add(p.socioId);
+      return acc + p.valorPago;
+    }, 0);
+    const totalEsperado = sociosAtivos.reduce((acc, s) => acc + s.valorMensal, 0);
+    const ultimosMeses = getUltimosMeses(12);
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {socios.length === 0 ? (
-          <div className="col-span-full border border-dashed border-[#1F2937] p-10 rounded-[28px] text-center">
-            <p className="text-gray-500 font-medium">Você ainda não tem sócios cadastrados.</p>
+    const renderLista = () => (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-4">
+            <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Arrecadado em {formatMesRef(mesFiltroSocios)}</p>
+            <p className="text-2xl font-black text-[#22C55E]">{formatCurrency(totalArrecadado)}</p>
+          </div>
+          <div className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-4">
+            <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Esperado no mês</p>
+            <p className="text-2xl font-black text-white">{formatCurrency(totalEsperado)}</p>
+          </div>
+        </div>
+
+        {sociosAtivos.length === 0 ? (
+          <div className="border border-dashed border-[#1F2937] p-10 rounded-[28px] text-center">
+            <p className="text-gray-500 font-medium">Nenhum sócio ativo cadastrado.</p>
           </div>
         ) : (
-          socios.map((socio) => (
-            <div key={socio.id} className="flex items-center justify-between p-5 bg-[#0B0F1A] border border-[#1F2937] rounded-3xl group">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#FFD60A]/10 flex items-center justify-center border border-[#FFD60A]/20">
-                  <Users size={20} className="text-[#FFD60A]" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-white text-lg">{socio.nome}</h4>
-                  <div className="flex gap-2 text-[10px] uppercase font-black tracking-widest text-gray-500 mt-1">
-                    {socio.indicadoPorMembroId ? (
-                      <span className="bg-[#111827] px-2 py-0.5 rounded-full border border-[#1F2937]">Indicado por um membro</span>
-                    ) : (
-                      <span className="bg-[#111827] px-2 py-0.5 rounded-full border border-[#1F2937]">Sócio do Clube</span>
-                    )}
+          <div className="space-y-3">
+            {sociosAtivos.map((socio) => {
+              const emDia = socioEstaEmDia(socio.id, mesFiltroSocios, pagamentosSocios);
+              const expandido = sociosExpandidos.has(socio.id);
+              const unidade = socio.unidadeId ? unidadesMap.get(socio.unidadeId) : null;
+              const indicadoPor = socio.indicadoPorMembroId ? membrosAtivos.find(m => m.id === socio.indicadoPorMembroId) : null;
+              const pagSocio = pagamentosSocios.filter(p => p.socioId === socio.id);
+
+              return (
+                <div key={socio.id} className="bg-[#0B0F1A] border border-[#1F2937] rounded-3xl overflow-hidden">
+                  <div className="flex items-center justify-between p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl bg-[#FFD60A]/10 flex items-center justify-center border border-[#FFD60A]/20 shrink-0">
+                        <Users size={18} className="text-[#FFD60A]" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white">{socio.nome}</h4>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {unidade && (
+                            <span className="text-[10px] uppercase font-black tracking-widest text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full border border-blue-400/20">
+                              {unidade.nome}
+                            </span>
+                          )}
+                          {indicadoPor && (
+                            <span className="text-[10px] uppercase font-black tracking-widest text-purple-400 bg-purple-400/10 px-2 py-0.5 rounded-full border border-purple-400/20">
+                              ✦ {indicadoPor.nome.split(' ')[0]}
+                            </span>
+                          )}
+                          <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full border ${emDia ? 'text-green-400 bg-green-400/10 border-green-400/20' : 'text-red-400 bg-red-400/10 border-red-400/20'}`}>
+                            {emDia ? 'Em dia' : 'Pendente'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">Cota Mensal</p>
+                        <p className="font-black text-[#FFD60A]">{formatCurrency(socio.valorMensal)}</p>
+                      </div>
+                      {!emDia && (
+                        <button
+                          onClick={() => {
+                            setSocioSelecionado(socio);
+                            setEditingPagamento(null);
+                            setPagValorInput(String(socio.valorMensal));
+                            // Sugere o próximo mês ainda não pago a partir do ingresso
+                            const pagosSet = new Set(pagSocio.map(p => p.mesReferencia));
+                            let m = socio.mesIngresso || getCurrentMesRef();
+                            while (pagosSet.has(m)) m = addMonths(m, 1);
+                            setPagMesRef(m);
+                            setPagQtdParcelas(1);
+                            setPagDataPagamento(toInputDate());
+                            setPagObservacao('');
+                            setIsPagamentoSocioModalOpen(true);
+                          }}
+                          className="flex items-center gap-1 bg-[#22C55E]/10 text-[#22C55E] border border-[#22C55E]/20 px-3 py-1.5 rounded-xl text-xs font-black hover:bg-[#22C55E]/20"
+                        >
+                          <Plus size={13} /> Registrar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setEditingSocio(socio);
+                          setSocioNome(socio.nome);
+                          setSocioValor(String(socio.valorMensal));
+                          setSocioMesIngresso(socio.mesIngresso || getCurrentMesRef());
+                          setSocioUnidadeId(socio.unidadeId || '');
+                          setSocioIndicadoPorId(socio.indicadoPorMembroId || '');
+                          setIsSocioModalOpen(true);
+                        }}
+                        className="text-gray-500 hover:text-[#FFD60A] p-1"
+                        title="Editar sócio"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSocio(socio)}
+                        disabled={deletingSocioId === socio.id}
+                        className="text-gray-500 hover:text-red-400 p-1 disabled:opacity-40"
+                        title="Remover sócio"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                      <button
+                        onClick={() => toggleSocioExpandido(socio.id)}
+                        className="text-gray-500 hover:text-white p-1"
+                      >
+                        <ChevronDown size={16} className={`transition-transform ${expandido ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
                   </div>
+
+                  {expandido && (() => {
+                    const mesesPagos = pagSocio.map(p => p.mesReferencia);
+                    const mesAtual = getCurrentMesRef();
+                    // Base: do mês de ingresso até o mês atual (inclusive), sem retroagir além do ingresso
+                    const mesInicio = socio.mesIngresso || mesAtual;
+                    const mesesBase: string[] = [];
+                    let cur = mesInicio;
+                    while (cur <= mesAtual) { mesesBase.push(cur); cur = addMonths(cur, 1); }
+                    const todosMeses = [...new Set([...mesesPagos, ...mesesBase])].sort((a, b) => b.localeCompare(a));
+                    // Próximo mês ainda não pago (para sugerir no "Adicionar meses")
+                    const proximoMesLivre = (() => {
+                      const pagosSet = new Set(mesesPagos);
+                      let m = mesInicio;
+                      while (pagosSet.has(m)) m = addMonths(m, 1);
+                      return m;
+                    })();
+                    return (
+                      <div className="border-t border-[#1F2937] px-5 pb-5 pt-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">
+                            Histórico ({todosMeses.length} meses) {socio.mesIngresso ? `· desde ${formatMesRef(socio.mesIngresso)}` : ''}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSocioSelecionado(socio);
+                              setEditingPagamento(null);
+                              setPagValorInput(String(socio.valorMensal));
+                              setPagMesRef(proximoMesLivre);
+                              setPagDataPagamento(toInputDate());
+                              setPagObservacao('');
+                              setPagQtdParcelas(1);
+                              setIsPagamentoSocioModalOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[#FFD60A] text-[11px] font-black hover:opacity-80"
+                          >
+                            <Plus size={12} /> Adicionar meses
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                          {todosMeses.map(mes => {
+                            const pag = pagSocio.find(p => p.mesReferencia === mes);
+                            const isFuture = mes > getCurrentMesRef();
+                            return (
+                              <div key={mes} className={`rounded-xl p-2.5 border text-xs ${pag ? 'border-green-500/20 bg-green-500/5' : isFuture ? 'border-blue-500/10 bg-[#0B0F1A]' : 'border-[#1F2937] bg-[#111827]'}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`font-black ${isFuture && !pag ? 'text-blue-400/50' : 'text-gray-400'}`}>{formatMesRef(mes)}</span>
+                                  <div className="flex items-center gap-0.5">
+                                    {pag ? (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            setSocioSelecionado(socio);
+                                            setEditingPagamento(pag);
+                                            setPagValorInput(String(pag.valorPago));
+                                            setPagDataPagamento(pag.dataPagamento);
+                                            setPagObservacao(pag.observacao || '');
+                                            setPagMesRef(pag.mesReferencia);
+                                            setPagQtdParcelas(1);
+                                            setIsPagamentoSocioModalOpen(true);
+                                          }}
+                                          className="text-gray-600 hover:text-[#FFD60A]"
+                                          title="Editar"
+                                        >
+                                          <Pencil size={10} />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeletePagamentoSocio(pag.id)}
+                                          disabled={deletingPagamentoId === pag.id}
+                                          className="text-red-400/50 hover:text-red-400 ml-0.5"
+                                          title="Remover"
+                                        >
+                                          <Trash2 size={10} />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setSocioSelecionado(socio);
+                                          setEditingPagamento(null);
+                                          setPagValorInput(String(socio.valorMensal));
+                                          setPagMesRef(mes);
+                                          setPagDataPagamento(toInputDate());
+                                          setPagObservacao('');
+                                          setPagQtdParcelas(1);
+                                          setIsPagamentoSocioModalOpen(true);
+                                        }}
+                                        className="text-gray-600 hover:text-green-400"
+                                        title="Registrar pagamento"
+                                      >
+                                        <Plus size={11} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                {pag ? (
+                                  <div>
+                                    <p className="font-bold text-green-400">{formatCurrency(pag.valorPago)}</p>
+                                    <p className="text-gray-500 text-[10px]">{formatDate(pag.dataPagamento)}</p>
+                                    {pag.observacao && <p className="text-gray-500 text-[10px] truncate">{pag.observacao}</p>}
+                                  </div>
+                                ) : (
+                                  <p className={`font-bold ${isFuture ? 'text-blue-400/30' : 'text-red-400/60'}`}>
+                                    {isFuture ? 'Futuro' : 'Não pago'}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Cota Mensal</p>
-                <p className="font-black text-xl text-[#FFD60A]">{formatCurrency(socio.valorMensal)}</p>
-              </div>
-            </div>
-          ))
+              );
+            })}
+          </div>
         )}
       </div>
-    </div>
-  );
+    );
+
+    const renderPorUnidade = () => {
+      const sociosSemPagamento = sociosAtivos.filter(s => !socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios));
+      const grupos: Record<string, { nome: string; socios: Socio[] }> = {};
+
+      sociosSemPagamento.forEach(s => {
+        const key = s.unidadeId || '__sem_unidade__';
+        if (!grupos[key]) {
+          const unidade = s.unidadeId ? unidadesMap.get(s.unidadeId) : null;
+          grupos[key] = { nome: unidade?.nome || 'Sem unidade', socios: [] };
+        }
+        grupos[key].socios.push(s);
+      });
+
+      const entries = Object.entries(grupos).sort((a, b) => a[1].nome.localeCompare(b[1].nome, 'pt-BR'));
+
+      return (
+        <div className="space-y-4">
+          {entries.length === 0 ? (
+            <div className="border border-dashed border-[#1F2937] p-10 rounded-[28px] text-center">
+              <p className="text-green-400 font-bold">Todos os sócios estão em dia em {formatMesRef(mesFiltroSocios)}!</p>
+            </div>
+          ) : (
+            entries.map(([key, grupo]) => (
+              <div key={key} className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-black text-white">{grupo.nome}</h4>
+                  <span className="text-[10px] uppercase font-black tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20">
+                    {grupo.socios.length} inadimplente{grupo.socios.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {grupo.socios.map(s => (
+                    <div key={s.id} className="flex items-center justify-between py-2 border-t border-[#1F2937] first:border-0">
+                      <span className="text-sm text-gray-300">{s.nome}</span>
+                      <span className="text-sm font-bold text-red-400">{formatCurrency(s.valorMensal)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-[#1F2937] flex justify-end">
+                  <span className="text-xs font-black text-gray-500">
+                    Total em atraso: <span className="text-red-400">{formatCurrency(grupo.socios.reduce((acc, s) => acc + s.valorMensal, 0))}</span>
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex flex-wrap justify-between items-center gap-4 bg-[#111827] border border-[#1F2937] p-5 rounded-[24px]">
+          <div>
+            <h2 className="text-xl font-black text-white flex items-center gap-2">
+              <Users className="text-[#FFD60A]" /> Sócios / Contribuintes
+            </h2>
+            <p className="text-xs text-gray-400 mt-1 font-bold">Controle de mensalidades e inadimplência por unidade.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="month"
+              value={mesFiltroSocios}
+              onChange={e => setMesFiltroSocios(e.target.value)}
+              className="bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#FFD60A]"
+            />
+            <button
+              onClick={() => { setEditingSocio(null); setSocioNome(''); setSocioValor(''); setSocioUnidadeId(''); setSocioIndicadoPorId(''); setIsSocioModalOpen(true); }}
+              className="flex items-center gap-2 bg-[#FFD60A] text-black px-4 py-2 rounded-xl text-sm font-black shadow-[0_0_15px_rgba(255,214,10,0.3)] hover:opacity-90"
+            >
+              <Plus size={16} /> Novo Sócio
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2 bg-[#0B0F1A]/50 p-1.5 rounded-2xl border border-[#1F2937] w-fit">
+          {(['LISTA', 'POR_UNIDADE'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setSocioSubTab(tab)}
+              className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${socioSubTab === tab ? 'bg-[#FFD60A] text-black shadow-[0_0_12px_rgba(255,214,10,0.3)]' : 'text-gray-400 hover:text-white'}`}
+            >
+              {tab === 'LISTA' ? 'Lista de Sócios' : 'Por Unidade'}
+            </button>
+          ))}
+        </div>
+
+        {socioSubTab === 'LISTA' ? renderLista() : renderPorUnidade()}
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto pb-10">
@@ -2638,7 +3076,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       </Modal>
 
       {/* 4. Modal: Sócio */}
-      <Modal isOpen={isSocioModalOpen} onClose={() => !isSaving && setIsSocioModalOpen(false)} title="Novo Sócio">
+      <Modal isOpen={isSocioModalOpen} onClose={() => { if (!isSaving) { setIsSocioModalOpen(false); setEditingSocio(null); setSocioNome(''); setSocioValor(''); setSocioMesIngresso(getCurrentMesRef()); setSocioUnidadeId(''); setSocioIndicadoPorId(''); } }} title={editingSocio ? 'Editar Sócio' : 'Novo Sócio'}>
         <form onSubmit={handleSaveSocio} className="space-y-4">
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Nome do Patrocinador</label>
@@ -2651,20 +3089,180 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
               className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
             />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Cota Fixa Mensal (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={socioValor}
+                onChange={(e) => setSocioValor(e.target.value)}
+                placeholder="50.00"
+                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Mês de ingresso</label>
+              <input
+                type="month"
+                required
+                value={socioMesIngresso}
+                onChange={(e) => setSocioMesIngresso(e.target.value)}
+                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+              />
+            </div>
+          </div>
           <div>
-            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Cota Fixa Mensal a Repassar (R$)</label>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Unidade (opcional)</label>
+            <select
+              value={socioUnidadeId}
+              onChange={(e) => setSocioUnidadeId(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+            >
+              <option value="">Sem unidade</option>
+              {unidades.map(u => (
+                <option key={u.id} value={u.id}>{u.nome}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Indicado por (opcional)</label>
+            <select
+              value={socioIndicadoPorId}
+              onChange={(e) => setSocioIndicadoPorId(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+            >
+              <option value="">Ninguém / Não informado</option>
+              {membrosAtivos.map(m => (
+                <option key={m.id} value={m.id}>{m.nome}</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" disabled={isSaving} className="w-full mt-4 py-3 rounded-xl font-bold bg-[#FFD60A] text-black shadow-lg shadow-[#FFD60A]/20 flex items-center justify-center gap-2">
+            {isSaving ? <Loader2 size={18} className="animate-spin text-black" /> : <><Save size={18} /> {editingSocio ? 'Salvar Alterações' : 'Registrar Sócio'}</>}
+          </button>
+        </form>
+      </Modal>
+
+      {/* 5. Modal: Registrar / Editar Pagamento de Sócio */}
+      <Modal
+        isOpen={isPagamentoSocioModalOpen}
+        onClose={() => { if (!isSaving) { setIsPagamentoSocioModalOpen(false); setEditingPagamento(null); setPagQtdParcelas(1); } }}
+        title={editingPagamento ? `Editar Pagamento — ${formatMesRef(editingPagamento.mesReferencia)}` : `Registrar Pagamento — ${socioSelecionado?.nome || ''}`}
+      >
+        <form onSubmit={handleRegistrarPagamentoSocio} className="space-y-4">
+          {!editingPagamento && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Mês Inicial</label>
+                  <input
+                    type="month"
+                    required
+                    value={pagMesRef}
+                    onChange={e => setPagMesRef(e.target.value)}
+                    className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Nº de Parcelas</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    required
+                    value={pagQtdParcelas}
+                    onChange={e => setPagQtdParcelas(Math.max(1, Math.min(24, parseInt(e.target.value) || 1)))}
+                    className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+                  />
+                </div>
+              </div>
+
+              {pagMesRef && pagQtdParcelas > 0 && (() => {
+                const meses = getMesesRange(pagMesRef, pagQtdParcelas);
+                const jaPagos = new Set(
+                  socioSelecionado ? pagamentosSocios.filter(p => p.socioId === socioSelecionado.id).map(p => p.mesReferencia) : []
+                );
+                const novos = meses.filter(m => !jaPagos.has(m));
+                const duplicados = meses.filter(m => jaPagos.has(m));
+                return (
+                  <div className="bg-[#111827] border border-[#1F2937] rounded-xl p-3">
+                    <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-2">
+                      Meses a registrar ({novos.length} de {meses.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {meses.map(m => (
+                        <span key={m} className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                          jaPagos.has(m)
+                            ? 'text-gray-500 border-gray-700 bg-gray-800 line-through'
+                            : 'text-green-400 border-green-500/30 bg-green-500/10'
+                        }`}>
+                          {formatMesRef(m)}
+                        </span>
+                      ))}
+                    </div>
+                    {duplicados.length > 0 && (
+                      <p className="text-[10px] text-yellow-400 mt-2">
+                        {duplicados.length} mês(es) já pago(s) serão ignorados.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {editingPagamento && (
+            <div className="bg-[#111827] border border-[#1F2937] rounded-xl px-4 py-3 text-sm text-gray-400">
+              Mês: <span className="text-white font-bold">{formatMesRef(editingPagamento.mesReferencia)}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Data do Pagamento</label>
+            <input
+              type="date"
+              required
+              value={pagDataPagamento}
+              onChange={e => setPagDataPagamento(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">
+              {editingPagamento ? 'Valor Pago (R$)' : 'Valor por Parcela (R$)'}
+              {!editingPagamento && pagQtdParcelas > 1 && pagValorInput && (
+                <span className="ml-2 text-[#FFD60A] normal-case font-black">
+                  = Total {formatCurrency(parseFloat(pagValorInput) * pagQtdParcelas)}
+                </span>
+              )}
+            </label>
             <input
               type="number"
               step="0.01"
               required
-              value={socioValor}
-              onChange={(e) => setSocioValor(e.target.value)}
-              placeholder="50.00"
+              value={pagValorInput}
+              onChange={e => setPagValorInput(e.target.value)}
+              placeholder={String(socioSelecionado?.valorMensal || '')}
               className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
             />
           </div>
-          <button type="submit" disabled={isSaving} className="w-full mt-4 py-3 rounded-xl font-bold bg-[#FFD60A] text-black shadow-lg shadow-[#FFD60A]/20 flex items-center justify-center gap-2">
-            {isSaving ? <Loader2 size={18} className="animate-spin text-black" /> : <><Save size={18} /> Registrar Sócio</>}
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Observação (opcional)</label>
+            <input
+              type="text"
+              value={pagObservacao}
+              onChange={e => setPagObservacao(e.target.value)}
+              placeholder="Ex: PIX recebido via WhatsApp"
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+            />
+          </div>
+          <button type="submit" disabled={isSaving} className="w-full mt-4 py-3 rounded-xl font-bold bg-[#22C55E] text-white shadow-lg shadow-[#22C55E]/20 flex items-center justify-center gap-2">
+            {isSaving
+              ? <Loader2 size={18} className="animate-spin" />
+              : <><Save size={18} /> {editingPagamento ? 'Salvar Alterações' : pagQtdParcelas > 1 ? `Confirmar ${pagQtdParcelas} Parcelas` : 'Confirmar Pagamento'}</>
+            }
           </button>
         </form>
       </Modal>

@@ -43,7 +43,8 @@ import {
   VendaItem,
   Reuniao,
   ReuniaoPresenca,
-  FanfarraInstrumento
+  FanfarraInstrumento,
+  PagamentoSocio
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -767,6 +768,39 @@ export const createSocio = async (clubId: string, payload: Omit<Socio, 'id' | 'c
 export const deleteSocio = async (clubId: string, id: string) => {
   validateClub(clubId);
   await deleteDoc(doc(db, 'clubs', clubId, 'socios', id));
+};
+export const updateSocio = async (clubId: string, id: string, payload: Partial<Omit<Socio, 'id' | 'clubeId'>>) => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'socios', id), deepCleanUndefined(payload));
+};
+
+// --- PAGAMENTOS SOCIOS ---
+export const listPagamentosSocios = (clubId: string): Promise<PagamentoSocio[]> =>
+  listSimpleCol<PagamentoSocio>(clubId, 'pagamentos_socios');
+
+export const createPagamentoSocio = async (
+  clubId: string,
+  payload: Omit<PagamentoSocio, 'id' | 'clubeId'>
+): Promise<PagamentoSocio> => {
+  validateClub(clubId);
+  const docRef = doc(collection(db, 'clubs', clubId, 'pagamentos_socios'));
+  const novo: PagamentoSocio = { id: docRef.id, clubeId: clubId, ...payload };
+  await setDoc(docRef, deepCleanUndefined({ ...novo, criadoEm: serverTimestamp() }));
+  return novo;
+};
+
+export const deletePagamentoSocio = async (clubId: string, id: string): Promise<void> => {
+  validateClub(clubId);
+  await deleteDoc(doc(db, 'clubs', clubId, 'pagamentos_socios', id));
+};
+
+export const updatePagamentoSocio = async (
+  clubId: string,
+  id: string,
+  payload: Partial<Pick<PagamentoSocio, 'dataPagamento' | 'valorPago' | 'observacao'>>
+): Promise<void> => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId, 'pagamentos_socios', id), deepCleanUndefined(payload));
 };
 
 // --- CAMPORI ---

@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { buildFrequencySummary } from './Reunioes';
 import type { ReuniaoPresenca, Desbravador, Unidade, Reuniao, Cargo } from '../types';
 
-// Helpers para construir fixtures mínimos
-const makeReuniao = (id: string, trimestre: 1|2|3|4 = 1): Reuniao => ({
-  id, clubeId: 'clube1', data: '2024-01-01', trimestre, ativo: true,
+const makeReuniao = (id: string, trimestre: 1|2|3|4 = 1, titulo = 'Reunião Regular'): Reuniao => ({
+  id, clubeId: 'clube1', data: '2024-01-01', trimestre, titulo, ativo: true,
 });
 
 const makeUnidade = (id: string, nome: string): Unidade => ({
@@ -16,9 +15,14 @@ const makeMembro = (id: string, unidadeId: string, cargos: Desbravador['cargos']
   dataNascimento: '2010-01-01', status: 'ATIVO', cargos, sexo: 'M',
 });
 
-const makePresenca = (desbravadorId: string, reuniaoId: string, presente: boolean): ReuniaoPresenca => ({
+const makePresenca = (
+  desbravadorId: string,
+  reuniaoId: string,
+  presente: boolean,
+  justificativa?: string,
+): ReuniaoPresenca => ({
   id: `${desbravadorId}-${reuniaoId}`, reuniaoId, clubeId: 'clube1',
-  desbravadorId, unidadeId: 'u1', presente,
+  desbravadorId, unidadeId: 'u1', presente, justificativa,
 });
 
 const cargoConselheiro: Cargo = {
@@ -33,10 +37,7 @@ const cargos: Cargo[] = [cargoConselheiro];
 
 describe('buildFrequencySummary', () => {
   it('calcula frequência correta para unidade com presenças parciais', () => {
-    const membros = [
-      makeMembro('m1', 'u1'),
-      makeMembro('m2', 'u1'),
-    ];
+    const membros = [makeMembro('m1', 'u1'), makeMembro('m2', 'u1')];
     const presencas: ReuniaoPresenca[] = [
       makePresenca('m1', 'r1', true),
       makePresenca('m1', 'r2', true),
@@ -62,11 +63,11 @@ describe('buildFrequencySummary', () => {
   });
 
   it('retorna unitFrequencyPct null para unidade sem membros ativos', () => {
-    const membros: Desbravador[] = [];
-    const result = buildFrequencySummary([], membros, [unidade], reunioes, trimestre, cargos);
+    const result = buildFrequencySummary([], [], [unidade], reunioes, trimestre, cargos);
 
     expect(result[0].unitFrequencyPct).toBeNull();
     expect(result[0].memberCount).toBe(0);
+    expect(result[0].byMeetingType).toHaveLength(0);
   });
 
   it('identifica conselheiro e exclui da média da unidade', () => {
@@ -81,32 +82,52 @@ describe('buildFrequencySummary', () => {
 
     const result = buildFrequencySummary(presencas, [conselheiro, membro], [unidade], reunioes, trimestre, cargos);
 
-    expect(result[0].counselorId).toBe('c1');
-    expect(result[0].counselorPresent).toBe(2);
-    expect(result[0].counselorFrequencyPct).toBe(100);
-    // conselheiro excluído da média da unidade — apenas m1 conta
+    expect(result[0].counselors).toHaveLength(1);
+    expect(result[0].counselors[0].counselorId).toBe('c1');
+    expect(result[0].counselors[0].present).toBe(2);
+    expect(result[0].counselors[0].pct).toBe(100);
+    // conselheiro excluído da média — apenas m1 conta
     expect(result[0].memberCount).toBe(1);
     expect(result[0].unitFrequencyPct).toBe(0);
   });
 
-  it('retorna counselor* null para unidade sem conselheiro', () => {
+  it('suporta múltiplos conselheiros na mesma unidade', () => {
+    const c1 = makeMembro('c1', 'u1', [{ cargoId: 'cargo_conselheiro', unidadeId: 'u1' }]);
+    const c2 = makeMembro('c2', 'u1', [{ cargoId: 'cargo_conselheiro', unidadeId: 'u1' }]);
+    const membro = makeMembro('m1', 'u1');
+    const presencas: ReuniaoPresenca[] = [
+      makePresenca('c1', 'r1', true),
+      makePresenca('c1', 'r2', false),
+      makePresenca('c2', 'r1', true),
+      makePresenca('c2', 'r2', true),
+      makePresenca('m1', 'r1', true),
+      makePresenca('m1', 'r2', true),
+    ];
+
+    const result = buildFrequencySummary(presencas, [c1, c2, membro], [unidade], reunioes, trimestre, cargos);
+
+    expect(result[0].counselors).toHaveLength(2);
+    const pcts = result[0].counselors.map(c => c.pct).sort((a, b) => a - b);
+    expect(pcts).toEqual([50, 100]);
+    // nenhum conselheiro entra na média da unidade
+    expect(result[0].memberCount).toBe(1);
+    expect(result[0].unitFrequencyPct).toBe(100);
+  });
+
+  it('retorna lista vazia de conselheiros para unidade sem conselheiro', () => {
     const membros = [makeMembro('m1', 'u1')];
     const result = buildFrequencySummary([], membros, [unidade], reunioes, trimestre, cargos);
 
-    expect(result[0].counselorId).toBeNull();
-    expect(result[0].counselorNome).toBeNull();
-    expect(result[0].counselorPresent).toBeNull();
-    expect(result[0].counselorFrequencyPct).toBeNull();
+    expect(result[0].counselors).toHaveLength(0);
   });
 
-  it('retorna totalMeetings 0 e todos null para trimestre sem reuniões ativas', () => {
+  it('retorna totalMeetings 0 e unitFrequencyPct null para trimestre sem reuniões ativas', () => {
     const membros = [makeMembro('m1', 'u1')];
-    // trimestre 4 não tem reuniões no array
     const result = buildFrequencySummary([], membros, [unidade], reunioes, 4, cargos);
 
     expect(result[0].totalMeetings).toBe(0);
     expect(result[0].unitFrequencyPct).toBeNull();
-    expect(result[0].counselorFrequencyPct).toBeNull();
+    expect(result[0].counselors).toHaveLength(0);
   });
 
   it('não inclui unidades inativas no resultado', () => {
@@ -115,5 +136,36 @@ describe('buildFrequencySummary', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].unidadeId).toBe('u1');
+  });
+
+  it('agrupa breakdown por tipo de reunião e contabiliza justificativas', () => {
+    const reunioesMistas = [
+      makeReuniao('r1', 1, 'Reunião Regular'),
+      makeReuniao('r2', 1, 'Reunião Regular'),
+      makeReuniao('r3', 1, 'Capelania'),
+    ];
+    const membros = [makeMembro('m1', 'u1'), makeMembro('m2', 'u1')];
+    const presencas: ReuniaoPresenca[] = [
+      makePresenca('m1', 'r1', true),
+      makePresenca('m1', 'r2', false, 'Doença'),
+      makePresenca('m1', 'r3', true),
+      makePresenca('m2', 'r1', true),
+      makePresenca('m2', 'r2', false),
+      // m2 não tem registro em r3 → conta como falta
+    ];
+
+    const result = buildFrequencySummary(presencas, membros, [unidade], reunioesMistas, trimestre, cargos);
+
+    const regular = result[0].byMeetingType.find(t => t.titulo === 'Reunião Regular')!;
+    expect(regular.totalMeetings).toBe(2);
+    expect(regular.totalPresent).toBe(2);  // m1+r1, m2+r1
+    expect(regular.totalJustified).toBe(1); // m1+r2 com justificativa
+    expect(regular.totalAbsent).toBe(1);    // m2+r2 sem justificativa
+
+    const capelania = result[0].byMeetingType.find(t => t.titulo === 'Capelania')!;
+    expect(capelania.totalMeetings).toBe(1);
+    expect(capelania.totalPresent).toBe(1);  // m1
+    expect(capelania.totalAbsent).toBe(1);   // m2 sem registro
+    expect(capelania.totalJustified).toBe(0);
   });
 });

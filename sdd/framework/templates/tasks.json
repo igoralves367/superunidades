@@ -1,0 +1,114 @@
+{
+  "feature": "[feature-name]",
+  "execution_strategy": "batched",
+  "created_at": "[ISO datetime]",
+  "approved_at": null,
+  "stats": {
+    "total": 0,
+    "done": 0,
+    "in_progress": 0,
+    "pending": 0,
+    "by_layer": {
+      "1": 0,
+      "2": 0,
+      "3": 0
+    }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Definir tipos TypeScript",
+      "description": "Criar interfaces e tipos para o domínio da feature. Garantir que todos os campos Firestore estão tipados.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": [],
+      "files": [
+        "src/types/[feature].ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Interface principal definida com todos os campos",
+        "AC-2: Campo clubeId e ativo presentes em tipos de domínio",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-002",
+      "title": "Implementar componente principal",
+      "description": "Criar componente React principal da feature seguindo padrões do projeto.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-001"],
+      "files": [
+        "src/components/[Feature]/[Componente].tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Componente renderiza sem erros",
+        "AC-2: Props tipadas corretamente",
+        "AC-3: Estado de loading e erro tratados",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": ["DD-1"]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Implementar queries Firestore",
+      "description": "Adicionar funções de serviço para operações Firestore do domínio.",
+      "status": "pending",
+      "layer": 2,
+      "complexity": "Medium",
+      "depends_on": ["TASK-001"],
+      "files": [
+        "src/services/firestoreDb.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Query inclui clubeId no path",
+        "AC-2: Filtro where('ativo', '==', true) nas listagens",
+        "AC-3: Sem erros de runtime Firebase",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-004",
+      "title": "Code review",
+      "description": "Revisar código da feature com foco em multi-tenant, soft delete, TypeScript e segurança.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-002", "TASK-003"],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Sem any implícito",
+        "AC-2: Todas as queries têm clubeId",
+        "AC-3: Sem secrets hardcoded",
+        "GATE: sdd-code-reviewer aprovado"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-005",
+      "title": "Security review",
+      "description": "Verificar segurança: dados entre clubes, exposição de keys, soft delete correto.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-002", "TASK-003"],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Sem dados de um clube acessíveis por outro",
+        "AC-2: Sem deleteDoc em recursos principais",
+        "AC-3: Sem API keys hardcoded no código",
+        "GATE: sdd-code-reviewer security check aprovado"
+      ],
+      "references": [],
+      "design_decisions": []
+    }
+  ]
+}

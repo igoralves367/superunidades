@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, CalendarClock, Plus, Save, Clock, Trash2, ExternalLink } from 'lucide-react';
+import { Loader2, CalendarClock, Plus, Save, Clock, Trash2, ExternalLink, Pencil } from 'lucide-react';
+
+const MEETING_TYPES = ['Reunião Regular', 'Capelania', 'Evento', 'Visita', 'Outros'] as const;
 import { Usuario, Reuniao, Cargo } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
@@ -9,17 +11,31 @@ interface ReunioesProps {
   user: Usuario;
 }
 
+interface MeetingTypeBreakdown {
+  titulo: string;
+  totalMeetings: number;
+  totalPresent: number;
+  totalAbsent: number;
+  totalJustified: number;
+  pct: number | null;
+}
+
+interface CounselorFrequency {
+  counselorId: string;
+  counselorNome: string;
+  present: number;
+  total: number;
+  pct: number;
+}
+
 interface UnitFrequencySummary {
   unidadeId: string;
   unidadeNome: string;
   memberCount: number;
   unitFrequencyPct: number | null;
-  counselorId: string | null;
-  counselorNome: string | null;
-  counselorPresent: number | null;
-  counselorTotal: number | null;
-  counselorFrequencyPct: number | null;
   totalMeetings: number;
+  byMeetingType: MeetingTypeBreakdown[];
+  counselors: CounselorFrequency[];
 }
 
 export function buildFrequencySummary(
@@ -34,59 +50,94 @@ export function buildFrequencySummary(
     cargos.filter(c => c.tipo === 'CONSELHEIRO').map(c => c.id)
   );
 
-  const reunioesTrimestre = todasReunioes.filter(
-    r => r.trimestre === trimestre && r.ativo
-  );
+  const reunioesTrimestre = todasReunioes.filter(r => r.trimestre === trimestre && r.ativo);
   const totalMeetings = reunioesTrimestre.length;
   const reuniaoIds = new Set(reunioesTrimestre.map(r => r.id));
 
   const presencasTrimestre = presencas.filter(p => reuniaoIds.has(p.reuniaoId));
   const membrosAtivos = membros.filter(m => m.status === 'ATIVO');
 
+  const meetingsByTitulo = new Map<string, Reuniao[]>();
+  for (const r of reunioesTrimestre) {
+    const key = r.titulo ?? 'Sem título';
+    if (!meetingsByTitulo.has(key)) meetingsByTitulo.set(key, []);
+    meetingsByTitulo.get(key)!.push(r);
+  }
+
   return unidades
     .filter(u => u.ativo)
     .map(unidade => {
-      const conselheiro = membrosAtivos.find(m =>
-        m.cargos?.some(
-          c => conselheiroCargoIds.has(c.cargoId) && c.unidadeId === unidade.id
-        )
-      ) ?? null;
+      const conselheiros = membrosAtivos.filter(m =>
+        m.cargos?.some(c => conselheiroCargoIds.has(c.cargoId) && c.unidadeId === unidade.id)
+      );
+      const conselheiroIds = new Set(conselheiros.map(c => c.id));
 
       const membrosUnidade = membrosAtivos.filter(
-        m => m.unidadeId === unidade.id && m.id !== conselheiro?.id
+        m => m.unidadeId === unidade.id && !conselheiroIds.has(m.id)
       );
 
       let unitFrequencyPct: number | null = null;
       if (membrosUnidade.length > 0 && totalMeetings > 0) {
         const sumPct = membrosUnidade.reduce((acc, m) => {
-          const presente = presencasTrimestre.filter(
-            p => p.desbravadorId === m.id && p.presente
-          ).length;
+          const presente = presencasTrimestre.filter(p => p.desbravadorId === m.id && p.presente).length;
           return acc + (presente / totalMeetings) * 100;
         }, 0);
         unitFrequencyPct = Math.round(sumPct / membrosUnidade.length);
       }
 
-      let counselorPresent: number | null = null;
-      let counselorFrequencyPct: number | null = null;
-      if (conselheiro && totalMeetings > 0) {
-        counselorPresent = presencasTrimestre.filter(
+      const byMeetingType: MeetingTypeBreakdown[] = [];
+      if (membrosUnidade.length > 0) {
+        for (const [titulo, reusDeTipo] of meetingsByTitulo) {
+          let totalPresent = 0;
+          let totalAbsent = 0;
+          let totalJustified = 0;
+
+          for (const m of membrosUnidade) {
+            for (const r of reusDeTipo) {
+              const p = presencasTrimestre.find(pr => pr.desbravadorId === m.id && pr.reuniaoId === r.id);
+              if (p?.presente) {
+                totalPresent++;
+              } else if (p?.justificativa?.trim()) {
+                totalJustified++;
+              } else {
+                totalAbsent++;
+              }
+            }
+          }
+
+          const possible = membrosUnidade.length * reusDeTipo.length;
+          byMeetingType.push({
+            titulo,
+            totalMeetings: reusDeTipo.length,
+            totalPresent,
+            totalAbsent,
+            totalJustified,
+            pct: possible > 0 ? Math.round((totalPresent / possible) * 100) : null,
+          });
+        }
+      }
+
+      const counselors: CounselorFrequency[] = conselheiros.map(conselheiro => {
+        const present = presencasTrimestre.filter(
           p => p.desbravadorId === conselheiro.id && p.presente
         ).length;
-        counselorFrequencyPct = Math.round((counselorPresent / totalMeetings) * 100);
-      }
+        return {
+          counselorId: conselheiro.id,
+          counselorNome: conselheiro.nome,
+          present,
+          total: totalMeetings,
+          pct: totalMeetings > 0 ? Math.round((present / totalMeetings) * 100) : 0,
+        };
+      });
 
       return {
         unidadeId: unidade.id,
         unidadeNome: unidade.nome,
         memberCount: membrosUnidade.length,
         unitFrequencyPct,
-        counselorId: conselheiro?.id ?? null,
-        counselorNome: conselheiro?.nome ?? null,
-        counselorPresent,
-        counselorTotal: conselheiro ? totalMeetings : null,
-        counselorFrequencyPct,
         totalMeetings,
+        byMeetingType,
+        counselors,
       };
     });
 }
@@ -103,12 +154,21 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   const [reunioes, setReunioes] = useState<Reuniao[]>([]);
   const [clubSlug, setClubSlug] = useState('');
 
-  // Modal states
+  // Modal criar
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newData, setNewData] = useState<string>('');
-  const [newTitulo, setNewTitulo] = useState('');
+  const [newTipo, setNewTipo] = useState<string>('Reunião Regular');
+  const [newTituloCustom, setNewTituloCustom] = useState('');
   const [newQuarter, setNewQuarter] = useState<1 | 2 | 3 | 4>(1);
+
+  // Modal editar
+  const [editReuniao, setEditReuniao] = useState<Reuniao | null>(null);
+  const [isEditSaving, setIsEditSaving] = useState(false);
+  const [editData, setEditData] = useState('');
+  const [editTipo, setEditTipo] = useState<string>('Reunião Regular');
+  const [editTituloCustom, setEditTituloCustom] = useState('');
+  const [editQuarter, setEditQuarter] = useState<1 | 2 | 3 | 4>(1);
 
   // States do Relatorio
   const [reportReuniao, setReportReuniao] = useState<Reuniao | null>(null);
@@ -175,6 +235,9 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     }
   }, [activeView, summaryQuarter]);
 
+  const resolvedTitulo = (tipo: string, custom: string) =>
+    tipo === 'Outros' ? (custom.trim() || 'Outros') : tipo;
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newData || !user.clubeId) return;
@@ -183,13 +246,14 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     try {
       await fs.createReuniao(user.clubeId, {
         data: newData,
-        titulo: newTitulo || `Reunião ${newData.split('-').reverse().join('/')}`,
+        titulo: resolvedTitulo(newTipo, newTituloCustom),
         trimestre: newQuarter,
         ativo: true
       });
       setIsModalOpen(false);
-      setNewTitulo('');
       setNewData('');
+      setNewTipo('Reunião Regular');
+      setNewTituloCustom('');
       await loadData();
     } catch (err) {
       console.error(err);
@@ -208,6 +272,36 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     } catch (e) {
       console.error(e);
       alert('Erro ao excluir');
+    }
+  };
+
+  const openEdit = (reu: Reuniao, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const isCustom = !MEETING_TYPES.slice(0, -1).includes(reu.titulo as any);
+    setEditReuniao(reu);
+    setEditData(reu.data);
+    setEditQuarter(reu.trimestre ?? 1);
+    setEditTipo(isCustom ? 'Outros' : (reu.titulo ?? 'Reunião Regular'));
+    setEditTituloCustom(isCustom ? (reu.titulo ?? '') : '');
+  };
+
+  const handleEditSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editReuniao || !user.clubeId) return;
+    setIsEditSaving(true);
+    try {
+      await fs.updateReuniao(user.clubeId, editReuniao.id, {
+        data: editData,
+        titulo: resolvedTitulo(editTipo, editTituloCustom),
+        trimestre: editQuarter,
+      });
+      setEditReuniao(null);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar.');
+    } finally {
+      setIsEditSaving(false);
     }
   };
 
@@ -330,12 +424,20 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
                         </p>
                        </div>
 
-                       <button
-                        onClick={(e) => handleDelete(reuniao.id, e)}
-                        className="absolute bottom-4 right-4 p-2 text-gray-500 hover:text-red-500 bg-[#111827] rounded-lg opacity-0 group-hover:opacity-100 transition-all border border-[#1F2937] hover:border-red-500/50"
-                      >
-                        <Trash2 size={16} />
-                       </button>
+                       <div className="absolute bottom-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={(e) => openEdit(reuniao, e)}
+                          className="p-2 text-gray-500 hover:text-[#00F5A0] bg-[#111827] rounded-lg border border-[#1F2937] hover:border-[#00F5A0]/50"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(reuniao.id, e)}
+                          className="p-2 text-gray-500 hover:text-red-500 bg-[#111827] rounded-lg border border-[#1F2937] hover:border-red-500/50"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                       </div>
                     </div>
                   ))}
                 </div>
@@ -387,9 +489,9 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
                   <p className="text-gray-400 font-bold">Nenhuma reunião registrada neste trimestre.</p>
                 </div>
               ) : (
-                <div className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-[#1F2937] flex items-center justify-between">
-                    <h2 className="font-black text-white uppercase tracking-tight">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-black text-white uppercase tracking-tight text-sm">
                       {summaryQuarter}º Trimestre
                     </h2>
                     <span className="text-xs font-bold text-gray-500">
@@ -397,59 +499,72 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
                     </span>
                   </div>
 
-                  {/* Cabeçalho da tabela */}
-                  <div className="hidden md:grid grid-cols-3 px-5 py-2 border-b border-[#1F2937] text-[10px] uppercase tracking-widest font-black text-gray-500">
-                    <span>Unidade</span>
-                    <span>Frequência da Unidade</span>
-                    <span>Conselheiro</span>
-                  </div>
-
-                  {/* Linhas */}
-                  <div className="divide-y divide-[#1F2937]">
-                    {summaryData.map(row => (
-                      <div key={row.unidadeId} className="grid grid-cols-1 md:grid-cols-3 px-5 py-3 gap-2 md:gap-0 items-center">
-                        {/* Unidade */}
-                        <span className="font-black text-white uppercase text-sm truncate">
-                          {row.unidadeNome}
+                  {summaryData.map(row => (
+                    <div key={row.unidadeId} className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl overflow-hidden">
+                      {/* Card header */}
+                      <div className="px-5 py-3 border-b border-[#1F2937] flex flex-wrap items-center gap-3">
+                        <span className="font-black text-white uppercase tracking-tight">{row.unidadeNome}</span>
+                        <span className="text-xs font-bold text-gray-500">
+                          {row.memberCount} {row.memberCount === 1 ? 'membro' : 'membros'}
                         </span>
-
-                        {/* Frequência da Unidade */}
-                        <div className="flex items-center gap-2">
-                          {row.unitFrequencyPct === null ? (
-                            <span className="text-gray-500 font-bold text-sm">— sem membros</span>
-                          ) : (
-                            <>
-                              <span className={`font-black text-lg ${freqColor(row.unitFrequencyPct)}`}>
-                                {row.unitFrequencyPct}%
-                              </span>
-                              <span className="text-gray-500 text-xs font-bold">
-                                ({row.memberCount} {row.memberCount === 1 ? 'membro' : 'membros'})
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Conselheiro */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {row.counselorNome === null ? (
-                            <span className="text-gray-500 font-bold text-sm">Sem conselheiro</span>
-                          ) : (
-                            <>
-                              <span className="text-gray-300 font-bold text-sm truncate max-w-[120px]">
-                                {row.counselorNome}
-                              </span>
-                              <span className="text-gray-500 font-bold text-xs">
-                                {row.counselorPresent}/{row.counselorTotal}
-                              </span>
-                              <span className={`font-black text-sm ${freqColor(row.counselorFrequencyPct)}`}>
-                                {row.counselorFrequencyPct}%
-                              </span>
-                            </>
-                          )}
-                        </div>
+                        {row.unitFrequencyPct !== null ? (
+                          <span className={`text-sm font-black ml-auto ${freqColor(row.unitFrequencyPct)}`}>
+                            {row.unitFrequencyPct}% geral
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 font-bold text-xs ml-auto">sem membros</span>
+                        )}
                       </div>
-                    ))}
-                  </div>
+
+                      {/* Breakdown por tipo de reunião */}
+                      {row.byMeetingType.length > 0 && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-[#1F2937]">
+                                <th className="text-left px-5 py-2 font-black uppercase tracking-widest text-gray-500 text-[10px]">Tipo</th>
+                                <th className="text-center px-3 py-2 font-black uppercase tracking-widest text-gray-500 text-[10px]">Reun.</th>
+                                <th className="text-center px-3 py-2 font-black uppercase tracking-widest text-[#00F5A0]/70 text-[10px]">Pres</th>
+                                <th className="text-center px-3 py-2 font-black uppercase tracking-widest text-[#E53935]/70 text-[10px]">Falt</th>
+                                <th className="text-center px-3 py-2 font-black uppercase tracking-widest text-yellow-400/70 text-[10px]">Just</th>
+                                <th className="text-center px-3 py-2 font-black uppercase tracking-widest text-gray-500 text-[10px]">%</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#1F2937]">
+                              {row.byMeetingType.map(tipo => (
+                                <tr key={tipo.titulo} className="hover:bg-[#111827]/50 transition-colors">
+                                  <td className="px-5 py-2.5 font-bold text-gray-300">{tipo.titulo}</td>
+                                  <td className="text-center px-3 py-2.5 font-bold text-gray-400">{tipo.totalMeetings}</td>
+                                  <td className="text-center px-3 py-2.5 font-black text-[#00F5A0]">{tipo.totalPresent}</td>
+                                  <td className="text-center px-3 py-2.5 font-black text-[#E53935]">{tipo.totalAbsent}</td>
+                                  <td className="text-center px-3 py-2.5 font-black text-yellow-400">{tipo.totalJustified}</td>
+                                  <td className="text-center px-3 py-2.5">
+                                    <span className={`font-black ${freqColor(tipo.pct)}`}>
+                                      {tipo.pct !== null ? `${tipo.pct}%` : '—'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Conselheiros */}
+                      <div className="px-5 py-3 border-t border-[#1F2937] flex flex-wrap gap-4 items-center">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-gray-500">
+                          {row.counselors.length === 0 ? 'Sem conselheiro' : row.counselors.length === 1 ? 'Conselheiro' : 'Conselheiros'}
+                        </span>
+                        {row.counselors.map(c => (
+                          <div key={c.counselorId} className="flex items-center gap-2">
+                            <span className="text-gray-300 font-bold text-sm">{c.counselorNome}</span>
+                            <span className="text-gray-500 text-xs font-bold">{c.present}/{c.total}</span>
+                            <span className={`font-black text-sm ${freqColor(c.pct)}`}>{c.pct}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
@@ -477,15 +592,28 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Título (Opcional)</label>
-            <input
-              type="text"
-              value={newTitulo}
-              onChange={e => setNewTitulo(e.target.value)}
-              placeholder="Ex: Reunião Reguar"
-              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935]"
-            />
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Tipo de Reunião</label>
+            <select
+              value={newTipo}
+              onChange={e => setNewTipo(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-[#E53935]"
+            >
+              {MEETING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
+
+          {newTipo === 'Outros' && (
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Nome Personalizado</label>
+              <input
+                type="text"
+                value={newTituloCustom}
+                onChange={e => setNewTituloCustom(e.target.value)}
+                placeholder="Ex: Sábado Total, Acampamento..."
+                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935] text-white"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Trimestre</label>
@@ -517,6 +645,79 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
               className="flex-1 py-3 rounded-xl font-bold bg-[#E53935] text-white shadow-[0_0_15px_rgba(229,57,53,0.3)] hover:opacity-90 transition-all flex items-center justify-center gap-2"
             >
               {isSaving ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Salvar</>}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Editar Reunião */}
+      <Modal isOpen={!!editReuniao} onClose={() => !isEditSaving && setEditReuniao(null)} title="Editar Reunião">
+        <form onSubmit={handleEditSave} className="space-y-4">
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Data</label>
+            <input
+              type="date"
+              required
+              value={editData}
+              onChange={e => setEditData(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935] text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Tipo de Reunião</label>
+            <select
+              value={editTipo}
+              onChange={e => setEditTipo(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-[#E53935]"
+            >
+              {MEETING_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {editTipo === 'Outros' && (
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Nome Personalizado</label>
+              <input
+                type="text"
+                value={editTituloCustom}
+                onChange={e => setEditTituloCustom(e.target.value)}
+                placeholder="Ex: Sábado Total, Acampamento..."
+                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935] text-white"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Trimestre</label>
+            <select
+              required
+              value={editQuarter}
+              onChange={e => setEditQuarter(Number(e.target.value) as 1|2|3|4)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-[#E53935]"
+            >
+              <option value={1}>1º Trimestre</option>
+              <option value={2}>2º Trimestre</option>
+              <option value={3}>3º Trimestre</option>
+              <option value={4}>4º Trimestre</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => setEditReuniao(null)}
+              disabled={isEditSaving}
+              className="flex-1 py-3 rounded-xl font-bold bg-[#111827] text-gray-400 border border-[#1F2937] hover:bg-[#1F2937] transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isEditSaving || !editData}
+              className="flex-1 py-3 rounded-xl font-bold bg-[#E53935] text-white shadow-[0_0_15px_rgba(229,57,53,0.3)] hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            >
+              {isEditSaving ? <Loader2 size={18} className="animate-spin" /> : <><Save size={18} /> Salvar</>}
             </button>
           </div>
         </form>

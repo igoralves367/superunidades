@@ -17,7 +17,7 @@
 - **Spec funcional**: aprovado
 - **Spec técnico**: aprovado
 - **Tasks**: aprovado
-- **Implementação**: 4/7 completas (TASK-001, TASK-002, TASK-003, TASK-004)
+- **Implementação**: 4/7 completas (TASK-001, TASK-002, TASK-003, TASK-004) + evolução: múltiplos conselheiros + breakdown por tipo de reunião
 - **Estratégia de execução**: batched
 
 ## Contexto Inicial

@@ -3,7 +3,7 @@
   "execution_strategy": "batched",
   "stats": {
     "total": 7,
-    "done": 3,
+    "done": 4,
     "by_layer": { "1": 4, "3": 3 }
   },
   "tasks": [
@@ -68,7 +68,7 @@
       "id": "TASK-004",
       "title": "Testes unitários de buildFrequencySummary",
       "description": "Cobrir buildFrequencySummary com vitest: unidade com presenças parciais, unidade sem registros (0%), unidade sem membros (null), conselheiro identificado, sem conselheiro, trimestre sem reuniões. Meta de cobertura 60% da função.",
-      "status": "pending",
+      "status": "done",
       "layer": 1,
       "complexity": "Low",
       "depends_on": ["TASK-001"],

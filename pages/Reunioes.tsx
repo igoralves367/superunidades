@@ -22,7 +22,7 @@ interface UnitFrequencySummary {
   totalMeetings: number;
 }
 
-function buildFrequencySummary(
+export function buildFrequencySummary(
   presencas: ReuniaoPresenca[],
   membros: Desbravador[],
   unidades: Unidade[],

@@ -1085,6 +1085,7 @@ export const saveRankingUnitProgress = async (
       bonusPoints: value.bonusPoints ?? 0,
       penaltyPoints: value.penaltyPoints ?? 0,
       calculatedPoints: value.calculatedPoints ?? 0,
+      validacaoMeta: value.validacaoMeta ?? null,
       updatedBy,
       updatedAt: serverTimestamp()
     });

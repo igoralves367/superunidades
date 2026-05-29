@@ -1,0 +1,294 @@
+{
+  "feature": "validacoes-clubao",
+  "execution_strategy": "batched",
+  "stats": {
+    "total": 11,
+    "done": 11,
+    "by_layer": {
+      "1": 6,
+      "2": 2,
+      "3": 3
+    }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Estender tipos TypeScript",
+      "description": "Adicionar campos opcionais `batizado` e `pgNome` em Desbravador. Adicionar `validacaoMeta` opcional em RankingProgressEntry. Criar tipo auxiliar AutoFrequenciaResult.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": [],
+      "files": [
+        "types.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Desbravador possui batizado?: boolean e pgNome?: string",
+        "AC-2: RankingProgressEntry possui validacaoMeta opcional com os campos do spec",
+        "AC-3: AutoFrequenciaResult definido conforme contrato técnico",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-6",
+        "US-8"
+      ],
+      "design_decisions": [
+        "DD-1"
+      ]
+    },
+    {
+      "id": "TASK-002",
+      "title": "Função buildAutoFrequencia",
+      "description": "Criar buildAutoFrequencia em firestoreDb.ts que reutiliza a lógica de buildFrequencySummary para calcular penalidades de conselheiros e bônus de reuniões do clube por unidade. Não persiste — apenas calcula.",
+      "status": "done",
+      "layer": 2,
+      "complexity": "High",
+      "depends_on": [
+        "TASK-001"
+      ],
+      "files": [
+        "services/firestoreDb.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Retorna AutoFrequenciaResult[] (um por unidade)",
+        "AC-2: Calcula -100 pts por conselheiro com presença < 100%",
+        "AC-3: Aplica bônus +50 pts em reuniões com >= 85% de presença média",
+        "AC-4: Mapeia quarter.number para Reuniao.trimestre",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": [
+        "DD-2",
+        "DD-3"
+      ]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Componente FrequenciaAutoCard",
+      "description": "Card que exibe resultado auto-calculado de frequência (conselheiros e reuniões do clube) com badge 'Automático', % e penalidades/bônus.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-002"
+      ],
+      "files": [
+        "components/Validacoes/FrequenciaAutoCard.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Exibe badge 'Automático'",
+        "AC-2: Mostra % de presença e pontos resultantes",
+        "AC-3: Lista conselheiros com ausências",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-004",
+      "title": "Forms de validação manual",
+      "description": "Criar ManualValidacaoForm (Cultos/PG com % e bônus 85%), DevocionallForm (checkbox + contagem não batizados) e ClassesForm (lista de desbravadores com checkbox por membro).",
+      "status": "done",
+      "layer": 1,
+      "complexity": "High",
+      "depends_on": [
+        "TASK-001"
+      ],
+      "files": [
+        "components/Validacoes/ManualValidacaoForm.tsx",
+        "components/Validacoes/DevocionallForm.tsx",
+        "components/Validacoes/ClassesForm.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: ManualValidacaoForm calcula bônus automaticamente em >= 85%",
+        "AC-2: DevocionallForm soma +50 pts por não batizado",
+        "AC-3: ClassesForm calcula pontos proporcionais aos desbravadores confirmados",
+        "AC-4: Desbravadores INATIVO excluídos da lista de Classes",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-4",
+        "US-5",
+        "US-6",
+        "US-7"
+      ],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-005",
+      "title": "Modal de detalhe e card de unidade",
+      "description": "Criar ValidacaoDetailModal (agrega os 6 forms + botão salvar) e ValidacaoUnitCard (resumo com 6 badges e pontuação). Aplica deepCleanUndefined antes de salvar.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "High",
+      "depends_on": [
+        "TASK-003",
+        "TASK-004"
+      ],
+      "files": [
+        "components/Validacoes/ValidacaoDetailModal.tsx",
+        "components/Validacoes/ValidacaoUnitCard.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Modal agrega os 6 formulários de validação",
+        "AC-2: Salvar persiste via saveRankingUnitProgress",
+        "AC-3: canEdit controla edição (conselheiro só própria unidade)",
+        "AC-4: Card mostra status de cada validação e pontuação parcial",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-1"
+      ],
+      "design_decisions": [
+        "DD-2",
+        "DD-4"
+      ]
+    },
+    {
+      "id": "TASK-006",
+      "title": "Painel Validacoes e integração no Clubão",
+      "description": "Criar ValidacoesPanel com seletor de trimestre e hook useValidacoes. Adicionar tabs (Ranking | Validações) em Clubao.tsx integrando o painel.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "High",
+      "depends_on": [
+        "TASK-005"
+      ],
+      "files": [
+        "components/Validacoes/ValidacoesPanel.tsx",
+        "pages/Clubao.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Aba 'Validações' visível no Clubão",
+        "AC-2: Seletor de trimestre filtra os dados",
+        "AC-3: Lista unidades com filtro de permissão por perfil",
+        "AC-4: useValidacoes faz merge de auto-cálculo com ranking_progress",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-1"
+      ],
+      "design_decisions": [
+        "DD-1",
+        "DD-4"
+      ]
+    },
+    {
+      "id": "TASK-007",
+      "title": "Campos batizado e pgNome em Membros",
+      "description": "Adicionar campos batizado (sim/não) e pgNome (texto) no modal de edição de desbravador em Membros.tsx e persistir via firestoreDb.",
+      "status": "done",
+      "layer": 2,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-001"
+      ],
+      "files": [
+        "pages/Membros.tsx",
+        "services/firestoreDb.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Campo batizado no formulário de desbravador",
+        "AC-2: Campo pgNome no formulário de desbravador",
+        "AC-3: Ambos persistem corretamente no Firestore",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-8"
+      ],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-008",
+      "title": "Testes unitários buildAutoFrequencia",
+      "description": "Testes vitest cobrindo cálculo de penalidades de conselheiros, bônus de 85%, e caso sem reuniões no trimestre.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-002"
+      ],
+      "files": [
+        "services/__tests__/buildAutoFrequencia.test.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Testa 100% presença → 0 penalidades",
+        "AC-2: Testa conselheiro ausente → -100 pts",
+        "AC-3: Testa 84% sem bônus e 85% com bônus",
+        "AC-4: Testa sem reuniões → entries vazios sem erro",
+        "GATE: npx vitest run passa"
+      ],
+      "references": [
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-009",
+      "title": "Code review",
+      "description": "Revisão de código e qualidade com sdd-code-reviewer.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-006",
+        "TASK-007",
+        "TASK-008"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Sem code smells críticos",
+        "AC-2: Padrões React 19 + TypeScript seguidos"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-010",
+      "title": "Performance review",
+      "description": "Verificar queries Firestore (evitar leituras redundantes de reunioes_presencas) e re-renders desnecessários no painel.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-006"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Sem leituras Firestore redundantes por unidade",
+        "AC-2: useMemo/useCallback aplicados onde necessário"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-011",
+      "title": "Security review",
+      "description": "Verificar clubeId em todas as operações, soft delete de desbravadores, filtro de permissão por perfil e ausência de secrets.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-006",
+        "TASK-007"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Toda operação Firestore valida clubeId",
+        "AC-2: Conselheiro só edita própria unidade",
+        "AC-3: Sem secrets hardcoded"
+      ],
+      "references": [],
+      "design_decisions": [
+        "DD-4"
+      ]
+    }
+  ]
+}

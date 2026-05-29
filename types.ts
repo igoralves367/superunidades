@@ -390,6 +390,32 @@ export interface ValidacaoMeta {
   dbvsAtivosNaClasse?: number;     // classes
   autoCalculated?: boolean;        // true = calculado pelo sistema
   counselorAbsences?: number;      // frequência de conselheiros
+  confirmadoRanking?: boolean;     // true = pontos aplicados ao ranking
+  confirmedAt?: any;               // Timestamp da confirmação
+}
+
+export interface ValidacaoResultadoEntry {
+  requirementId: string;
+  completed: boolean;
+  quantity?: number;
+  bonusInput?: number;
+  penaltyInput?: number;
+  basePoints: number;
+  bonusPoints: number;
+  penaltyPoints: number;
+  calculatedPoints: number;
+  notes?: string;
+  validacaoMeta?: ValidacaoMeta;
+  updatedAt?: any;
+}
+
+export interface ValidacaoUnitDoc {
+  id: string;
+  quarterId: string;
+  unitId: string;
+  clubeId: string;
+  resultados: Record<string, ValidacaoResultadoEntry>;
+  updatedAt?: any;
 }
 
 export interface AutoFrequenciaResult {

@@ -14,6 +14,8 @@ import {
   Unidade,
   Usuario,
   AutoFrequenciaResult,
+  ValidacaoResultadoEntry,
+  ValidacaoUnitDoc,
 } from '../../types';
 import * as fs from '../../services/firestoreDb';
 import { buildAutoFrequencia, requirementId } from '../../services/validacoes';
@@ -35,7 +37,8 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
   const [loading, setLoading] = useState(true);
 
   const [requirements, setRequirements] = useState<RankingRequirement[]>([]);
-  const [progressDocs, setProgressDocs] = useState<RankingUnitProgressDoc[]>([]);
+  const [rankingDocs, setRankingDocs] = useState<RankingUnitProgressDoc[]>([]);
+  const [validacaoDocs, setValidacaoDocs] = useState<ValidacaoUnitDoc[]>([]);
   const [desbravadores, setDesbravadores] = useState<Desbravador[]>([]);
   const [cargos, setCargos] = useState<Cargo[]>([]);
   const [classes, setClasses] = useState<Classe[]>([]);
@@ -61,9 +64,10 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
     if (!clubeId || !selectedQuarter) return;
     setLoading(true);
     try {
-      const [reqs, docs, dbvs, cgs, cls, reus, pres] = await Promise.all([
+      const [reqs, rankingDs, validacaoDs, dbvs, cgs, cls, reus, pres] = await Promise.all([
         fs.listRankingRequirements(clubeId, selectedQuarter.id),
         fs.listRankingProgress(clubeId, selectedQuarter.id),
+        fs.listValidacaoResults(clubeId, selectedQuarter.id),
         fs.listDesbravadores(clubeId),
         fs.listCargos(clubeId),
         fs.listClasses(clubeId),
@@ -72,7 +76,8 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
       ]);
       const validIds = VALIDACAO_REQ_IDS(selectedQuarter.number);
       setRequirements(reqs.filter(r => r.active && validIds.has(r.id)));
-      setProgressDocs(docs);
+      setRankingDocs(rankingDs);
+      setValidacaoDocs(validacaoDs);
       setDesbravadores(dbvs);
       setCargos(cgs);
       setClasses(cls);
@@ -106,25 +111,39 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
     return unidades;
   }, [unidades, user]);
 
-  const resultadosByUnit = (unitId: string): Record<string, RankingProgressEntry> => {
-    const doc = progressDocs.find(d => d.unitId === unitId && d.quarterId === selectedQuarterId);
-    return doc?.resultados ?? {};
-  };
+  const getValidacaoDoc = (unitId: string) =>
+    validacaoDocs.find(d => d.unitId === unitId && d.quarterId === selectedQuarterId) || null;
 
-  const handleSave = async (unitId: string, resultados: Record<string, RankingProgressEntry>) => {
+  const getRankingDoc = (unitId: string) =>
+    rankingDocs.find(d => d.unitId === unitId && d.quarterId === selectedQuarterId) || null;
+
+  const handleSave = async (
+    unitId: string,
+    validacaoResultados: Record<string, ValidacaoResultadoEntry>,
+    rankingResultados: Record<string, RankingProgressEntry>
+  ) => {
     if (!selectedQuarter) return;
     setSaving(true);
     try {
-      await fs.saveRankingUnitProgress(clubeId, selectedQuarter.id, unitId, resultados, {
-        id: user.id,
-        nome: user.nome,
-        email: user.email,
+      // Salva rascunho de validação
+      await fs.saveValidacaoResult(clubeId, selectedQuarter.id, unitId, validacaoResultados, {
+        id: user.id, nome: user.nome, email: user.email,
       });
+
+      // Aplica ao ranking só os confirmados (merge com o progresso existente)
+      if (Object.keys(rankingResultados).length > 0) {
+        const existing = getRankingDoc(unitId)?.resultados || {};
+        const merged = { ...existing, ...rankingResultados };
+        await fs.saveRankingUnitProgress(clubeId, selectedQuarter.id, unitId, merged, {
+          id: user.id, nome: user.nome, email: user.email,
+        });
+      }
+
       await loadData();
       setOpenUnitId(null);
     } catch (error) {
-      console.error(error);
-      alert('Erro ao salvar as validações.');
+      console.error('Erro ao salvar validações:', error);
+      alert('Erro ao salvar. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -166,8 +185,7 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
               key={unit.id}
               unit={unit}
               quarterNumber={selectedQuarter!.number}
-              requirements={requirements}
-              resultados={resultadosByUnit(unit.id)}
+              validacaoDoc={getValidacaoDoc(unit.id)}
               canEdit={canEditUnit(unit.id)}
               onOpen={() => setOpenUnitId(unit.id)}
             />
@@ -180,12 +198,15 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
           quarter={selectedQuarter}
           unit={openUnit}
           requirements={requirements}
-          progress={progressDocs.find(d => d.unitId === openUnit.id && d.quarterId === selectedQuarterId) || null}
+          rankingProgress={getRankingDoc(openUnit.id)}
+          validacaoDoc={getValidacaoDoc(openUnit.id)}
           desbravadores={desbravadores.filter(d => d.unidadeId === openUnit.id)}
           classes={classes}
           autoFrequencia={autoFrequenciaByUnit.get(openUnit.id) || null}
           canEdit={canEditUnit(openUnit.id) && !saving}
-          onSave={resultados => handleSave(openUnit.id, resultados)}
+          onSave={(validacaoResultados, rankingResultados) =>
+            handleSave(openUnit.id, validacaoResultados, rankingResultados)
+          }
           onClose={() => setOpenUnitId(null)}
         />
       )}

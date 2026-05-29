@@ -1,6 +1,6 @@
 import React from 'react';
-import { CheckCircle2, Circle, FileCheck2, Lock } from 'lucide-react';
-import { RankingProgressEntry, RankingRequirement, Unidade } from '../../types';
+import { CheckCircle2, Circle, Clock, FileCheck2, Lock } from 'lucide-react';
+import { Unidade, ValidacaoUnitDoc } from '../../types';
 import { requirementId } from '../../services/validacoes';
 
 export interface ValidacaoTipoDef {
@@ -20,61 +20,79 @@ export const VALIDACAO_TIPOS: ValidacaoTipoDef[] = [
 interface ValidacaoUnitCardProps {
   unit: Unidade;
   quarterNumber: number;
-  requirements: RankingRequirement[];
-  resultados: Record<string, RankingProgressEntry>;
+  validacaoDoc: ValidacaoUnitDoc | null;
   canEdit: boolean;
   onOpen: () => void;
+}
+
+type BadgeStatus = 'confirmed' | 'validated' | 'empty';
+
+function getBadgeStatus(validacaoDoc: ValidacaoUnitDoc | null, reqId: string): BadgeStatus {
+  const entry = validacaoDoc?.resultados[reqId];
+  if (!entry) return 'empty';
+  if (entry.validacaoMeta?.confirmadoRanking) return 'confirmed';
+  if (entry.completed || (entry.calculatedPoints ?? 0) > 0) return 'validated';
+  return 'empty';
 }
 
 export const ValidacaoUnitCard: React.FC<ValidacaoUnitCardProps> = ({
   unit,
   quarterNumber,
-  requirements,
-  resultados,
+  validacaoDoc,
   canEdit,
   onOpen,
 }) => {
-  const reqIds = new Set(requirements.map(r => r.id));
-  const total = VALIDACAO_TIPOS.reduce((sum, t) => {
+  const confirmedPts = VALIDACAO_TIPOS.reduce((sum, t) => {
     const id = requirementId(quarterNumber, t.tipo);
-    return sum + (resultados[id]?.calculatedPoints ?? 0);
+    const entry = validacaoDoc?.resultados[id];
+    return sum + (entry?.validacaoMeta?.confirmadoRanking ? (entry.calculatedPoints ?? 0) : 0);
   }, 0);
+
+  const confirmedCount = VALIDACAO_TIPOS.filter(t => {
+    const id = requirementId(quarterNumber, t.tipo);
+    return validacaoDoc?.resultados[id]?.validacaoMeta?.confirmadoRanking;
+  }).length;
 
   return (
     <div className="rounded-3xl border border-[#1F2937] bg-[#0D1220] p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{unit.tipo}</p>
           <h3 className="text-lg font-black text-white leading-tight">{unit.nome}</h3>
         </div>
-        <div className="px-3 py-2 rounded-2xl bg-white/5 border border-white/5 text-sm font-black text-white text-right">
-          <span className="text-[10px] text-gray-400 uppercase tracking-widest block">Total validações</span>
-          {total} pts
+        <div className="text-right">
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black">No ranking</p>
+          <p className="text-lg font-black text-emerald-400">{confirmedPts} pts</p>
+          <p className="text-[10px] text-gray-500">{confirmedCount}/6 confirmadas</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {VALIDACAO_TIPOS.map(t => {
           const id = requirementId(quarterNumber, t.tipo);
-          const exists = reqIds.has(id);
-          const entry = resultados[id];
-          const done = !!entry && (entry.completed || (entry.calculatedPoints ?? 0) > 0);
+          const status = getBadgeStatus(validacaoDoc, id);
           return (
             <div
               key={t.tipo}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${
-                !exists
-                  ? 'border-[#1F2937] bg-[#0B0F1A] text-gray-600'
-                  : done
-                    ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300'
-                    : 'border-[#1F2937] bg-[#0B0F1A] text-gray-400'
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-bold ${
+                status === 'confirmed'
+                  ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-300'
+                  : status === 'validated'
+                    ? 'border-yellow-500/30 bg-yellow-500/8 text-yellow-300'
+                    : 'border-[#1F2937] bg-[#0B0F1A] text-gray-500'
               }`}
             >
-              {done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+              {status === 'confirmed' ? <CheckCircle2 size={13} /> : status === 'validated' ? <Clock size={13} /> : <Circle size={13} />}
               {t.label}
             </div>
           );
         })}
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">
+        <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-emerald-400" /> Confirmado</span>
+        <span className="flex items-center gap-1"><Clock size={11} className="text-yellow-400" /> Validado</span>
+        <span className="flex items-center gap-1"><Circle size={11} /> Pendente</span>
       </div>
 
       <button

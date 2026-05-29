@@ -1106,6 +1106,36 @@ export const saveRankingUnitProgress = async (
   }), { merge: true });
 };
 
+// --- VALIDAÇÕES (rascunho separado do ranking) ---
+import { ValidacaoResultadoEntry, ValidacaoUnitDoc } from '../types';
+
+export const listValidacaoResults = async (clubId: string, quarterId: string): Promise<ValidacaoUnitDoc[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(query(collection(db, 'clubs', clubId, 'validacoes_resultados'), where('quarterId', '==', quarterId)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as ValidacaoUnitDoc));
+};
+
+export const saveValidacaoResult = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  resultados: Record<string, ValidacaoResultadoEntry>,
+  updatedBy?: { id: string; nome: string; email?: string }
+) => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const ref = doc(db, 'clubs', clubId, 'validacoes_resultados', docId);
+  await setDoc(ref, deepCleanUndefined({
+    id: docId,
+    quarterId,
+    unitId,
+    clubeId: clubId,
+    resultados,
+    updatedBy,
+    updatedAt: serverTimestamp(),
+  }), { merge: true });
+};
+
 export const ensureDefaultRanking = async (clubId: string) => {
   validateClub(clubId);
   const year = new Date().getFullYear();

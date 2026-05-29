@@ -106,6 +106,8 @@ export interface Desbravador {
   cargos: MemberCargo[];
   sexo: 'M' | 'F';
   cargoId?: string; // Legado
+  batizado?: boolean;
+  pgNome?: string;
 }
 
 export interface Usuario {
@@ -379,6 +381,31 @@ export interface RankingProgressEntry {
   calculatedPoints: number;
   updatedAt?: any;
   updatedBy?: { id: string; nome: string; email?: string; };
+  validacaoMeta?: ValidacaoMeta;
+}
+
+export interface ValidacaoMeta {
+  presencaPercent?: number;        // cultos / PG / reuniões do clube
+  quantidadeNaoBatizados?: number; // devocional
+  dbvsAtivosNaClasse?: number;     // classes
+  autoCalculated?: boolean;        // true = calculado pelo sistema
+  counselorAbsences?: number;      // frequência de conselheiros
+}
+
+export interface AutoFrequenciaResult {
+  unitId: string;
+  conselheiros: {
+    requirementId: string;
+    absences: number;
+    penaltyPoints: number;
+    details: { nome: string; presencaPercent: number }[];
+  };
+  reunioes: {
+    requirementId: string;
+    presencaPercent: number;
+    bonusPoints: number;
+    basePoints: number;
+  };
 }
 
 export interface RankingUnitProgressDoc {

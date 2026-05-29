@@ -14,6 +14,7 @@ export enum ClasseTipo {
   EXCURSIONISTA = 'EXCURSIONISTA',
   GUIA = 'GUIA',
   LIDER = 'LIDER',
+  LIDER_MASTER = 'LIDER_MASTER',
   AGRUPADAS = 'AGRUPADAS',
   UBN = 'UBN'
 }

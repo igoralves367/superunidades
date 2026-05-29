@@ -22,6 +22,7 @@ export const NEON_COLORS: Record<ClasseTipo, string> = {
   [ClasseTipo.EXCURSIONISTA]: '#A855F7',
   [ClasseTipo.GUIA]: '#FFD60A',
   [ClasseTipo.LIDER]: '#FBBF24',
+  [ClasseTipo.LIDER_MASTER]: '#F97316',
   [ClasseTipo.AGRUPADAS]: '#4B5563',
   [ClasseTipo.UBN]: '#22D3EE',
 };

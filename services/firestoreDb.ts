@@ -627,9 +627,24 @@ export const ensureDefaultClasses = async (clubId: string) => {
     { id: 'classe_excursionista', nome: 'Excursionista', ordem: 5, corHex: '#A855F7', categoria: 'NORMAL' },
     { id: 'classe_guia', nome: 'Guia', ordem: 6, corHex: '#FFD60A', categoria: 'NORMAL' },
     { id: 'classe_lider', nome: 'Líder', ordem: 7, corHex: 'linear-gradient(135deg, #111827 50%, #FFD60A 50%)', categoria: 'NORMAL' },
+    { id: 'classe_lider_master', nome: 'Líder Master', ordem: 8, corHex: '#F97316', categoria: 'NORMAL' },
     { id: 'classe_agrupadas', nome: 'Agrupadas', ordem: 99, corHex: '#374151', categoria: 'AGRUPADA' },
   ];
   defaults.forEach(c => batch.set(doc(db, 'clubs', clubId, 'classes', c.id), { ...c, ativo: true, origem: 'PADRAO', locked: true }, { merge: true }));
+  batch.set(metaRef, { done: true });
+  await batch.commit();
+};
+
+export const ensureDefaultClassesV2 = async (clubId: string) => {
+  validateClub(clubId);
+  const metaRef = doc(db, 'clubs', clubId, 'meta', 'seed_classes_v2');
+  if ((await getDoc(metaRef)).exists()) return;
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, 'clubs', clubId, 'classes', 'classe_lider_master'),
+    { id: 'classe_lider_master', nome: 'Líder Master', ordem: 8, corHex: '#F97316', categoria: 'NORMAL', ativo: true, origem: 'PADRAO', locked: true },
+    { merge: true }
+  );
   batch.set(metaRef, { done: true });
   await batch.commit();
 };

@@ -14,10 +14,11 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { Usuario, PerfilAcesso } from '../types';
-import { 
+import {
   createPublicClubSlug,
-  ensureDefaultClasses, 
-  ensureDefaultRequisitos, 
+  ensureDefaultClasses,
+  ensureDefaultClassesV2,
+  ensureDefaultRequisitos,
   ensureDefaultCargos,
   ensureDefaultUnidades,
   ensureDefaultInstructorTypes,
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Seeds Idempotentes
             await ensureDefaultClasses(profile.clubeId);
+            await ensureDefaultClassesV2(profile.clubeId);
             await ensureDefaultRequisitos(profile.clubeId);
             await ensureDefaultCargos(profile.clubeId);
             await ensureDefaultUnidades(profile.clubeId);
@@ -76,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             await ensureDefaultClasses(newClubId);
+            await ensureDefaultClassesV2(newClubId);
             await ensureDefaultRequisitos(newClubId);
             await ensureDefaultCargos(newClubId);
             await ensureDefaultUnidades(newClubId);

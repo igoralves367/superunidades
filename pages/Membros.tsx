@@ -80,7 +80,7 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
       setUnidades(fetchedUnits.filter(u => u.ativo));
       setMembros(fetchedMembers.filter(m => m.status === 'ATIVO'));
       setCargos(fetchedCargos.filter(c => c.ativo));
-      setClasses(fetchedClasses.filter(c => c.ativo && !c.id.includes('agrupadas')));
+      setClasses(fetchedClasses.filter(c => c.ativo));
     } catch (error) {
       console.error(error);
     } finally {

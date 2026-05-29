@@ -9,6 +9,9 @@ import {
   calculateRankingTotals,
   getRequirementRuleLabel
 } from '../services/ranking';
+import { ValidacoesPanel } from '../components/Validacoes/ValidacoesPanel';
+
+type ClubaoTab = 'ranking' | 'validacoes';
 
 interface ClubaoProps {
   user: Usuario;
@@ -91,6 +94,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
   const [requirementFilter, setRequirementFilter] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
   const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
+  const [activeTab, setActiveTab] = useState<ClubaoTab>('ranking');
 
   const loadBase = async () => {
     if (!clubId) return;
@@ -307,13 +311,15 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
           </p>
         </div>
         <div className="flex gap-3">
-          <input
-            placeholder="Filtrar unidade..."
-            className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl px-4 py-2 text-sm"
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          />
-          {selectedUnit && (
+          {activeTab === 'ranking' && (
+            <input
+              placeholder="Filtrar unidade..."
+              className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl px-4 py-2 text-sm"
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+            />
+          )}
+          {activeTab === 'ranking' && selectedUnit && (
             <button
               onClick={() => setSelectedUnitId('')}
               className="px-4 py-2 bg-[#111827] border border-[#1F2937] rounded-xl text-sm font-bold flex items-center gap-2"
@@ -324,6 +330,31 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
         </div>
       </header>
 
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab('ranking')}
+          className={`px-4 py-2 rounded-xl text-sm font-black ${
+            activeTab === 'ranking' ? 'bg-[#E53935] text-white' : 'bg-[#0B0F1A] border border-[#1F2937] text-gray-300'
+          }`}
+        >
+          Ranking
+        </button>
+        <button
+          onClick={() => setActiveTab('validacoes')}
+          className={`px-4 py-2 rounded-xl text-sm font-black ${
+            activeTab === 'validacoes' ? 'bg-[#E53935] text-white' : 'bg-[#0B0F1A] border border-[#1F2937] text-gray-300'
+          }`}
+        >
+          Validações
+        </button>
+      </div>
+
+      {activeTab === 'validacoes' && (
+        <ValidacoesPanel clubeId={clubId} user={user} quarters={quarters} unidades={unidades} />
+      )}
+
+      {activeTab === 'ranking' && (
+      <>
       <section className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -708,6 +739,8 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
             </button>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

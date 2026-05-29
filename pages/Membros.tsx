@@ -60,6 +60,8 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
   const [newMemberName, setNewMemberName] = useState('');
   const [selectedClassesIds, setSelectedClassesIds] = useState<string[]>([]);
   const [selectedCargoId, setSelectedCargoId] = useState<string>('');
+  const [newMemberBatizado, setNewMemberBatizado] = useState(false);
+  const [newMemberPg, setNewMemberPg] = useState('');
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeletingMemberId, setIsDeletingMemberId] = useState<string | null>(null);
@@ -114,6 +116,8 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
           classeId: selectedClassesIds[0] || '',
           classeIds: selectedClassesIds,
           cargos: selectedCargoId ? [{ cargoId: selectedCargoId, unidadeId: selectedUnidadeId }] : [],
+          batizado: newMemberBatizado,
+          pgNome: newMemberPg.trim(),
         });
       } else {
         await fs.createDesbravador(user.clubeId, {
@@ -124,13 +128,17 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
           dataNascimento: new Date().toISOString(),
           status: 'ATIVO',
           cargos: selectedCargoId ? [{ cargoId: selectedCargoId, unidadeId: selectedUnidadeId }] : [],
-          sexo: sexoDefault
+          sexo: sexoDefault,
+          batizado: newMemberBatizado,
+          pgNome: newMemberPg.trim(),
         });
       }
-      
+
       setNewMemberName('');
       setSelectedClassesIds([]);
       setSelectedCargoId('');
+      setNewMemberBatizado(false);
+      setNewMemberPg('');
       setEditingMemberId(null);
       setIsModalOpen(false);
       await loadData();
@@ -264,6 +272,8 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
                             setSelectedClassesIds(membro.classeIds || (membro.classeId ? [membro.classeId] : []));
                             setSelectedCargoId(membro.cargos?.[0]?.cargoId || '');
                             setSelectedUnidadeId(membro.unidadeId);
+                            setNewMemberBatizado(membro.batizado === true);
+                            setNewMemberPg(membro.pgNome || '');
                             setIsModalOpen(true);
                           }}
                           className="flex items-center gap-2 truncate hover:opacity-80 transition-opacity text-left outline-none"
@@ -382,8 +392,10 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
             setSelectedClassesIds([]);
             setSelectedCargoId('');
             setNewMemberName('');
+            setNewMemberBatizado(false);
+            setNewMemberPg('');
           }
-        }} 
+        }}
         title={editingMemberId ? "Editar Desbravador" : "Novo Desbravador"}
         icon={<User />}
       >
@@ -444,9 +456,31 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
             </select>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#0B0F1A] px-4 py-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="w-4 h-4 accent-[#E53935]"
+                checked={newMemberBatizado}
+                onChange={e => setNewMemberBatizado(e.target.checked)}
+              />
+              <span className="text-sm font-bold text-gray-200">Batizado</span>
+            </label>
+            <div>
+              <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Pequeno Grupo (PG)</label>
+              <input
+                type="text"
+                value={newMemberPg}
+                onChange={e => setNewMemberPg(e.target.value)}
+                placeholder="Nome do PG..."
+                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#E53935]"
+              />
+            </div>
+          </div>
+
           <div className="flex gap-3 pt-4">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
               disabled={isSaving}
               className="flex-1 py-3 rounded-xl font-bold bg-[#111827] text-gray-400 border border-[#1F2937] hover:bg-[#1F2937] transition-all"

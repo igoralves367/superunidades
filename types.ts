@@ -387,7 +387,9 @@ export interface RankingProgressEntry {
 
 export interface ValidacaoMeta {
   presencaPercent?: number;        // cultos / PG / reuniões do clube
-  quantidadeNaoBatizados?: number; // devocional
+  quantidadeNaoBatizados?: number; // devocional — não batizados confirmados
+  devocionaPercent?: number;       // devocional — % de membros confirmados
+  devocionaMinPercent?: number;    // devocional — % mínimo para pontuar (padrão 100)
   dbvsAtivosNaClasse?: number;     // classes
   autoCalculated?: boolean;        // true = calculado pelo sistema
   counselorAbsences?: number;      // frequência de conselheiros

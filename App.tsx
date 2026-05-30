@@ -14,6 +14,7 @@ import { Reunioes } from './pages/Reunioes';
 import { PublicChamada } from './pages/PublicChamada';
 import { Fanfarra } from './pages/Fanfarra';
 import { PublicFanfarra } from './pages/PublicFanfarra';
+import { PublicVencedor } from './pages/PublicVencedor';
 import { PerfilAcesso } from './types';
 import { Menu, AlertCircle, X, Loader2 } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
@@ -58,6 +59,10 @@ const App: React.FC = () => {
 
   if (hashRoute.startsWith('#fanfarra/') || hashRoute.startsWith('#fanfacoes/')) {
     return <PublicFanfarra />;
+  }
+
+  if (hashRoute.startsWith('#vencedor/')) {
+    return <PublicVencedor />;
   }
 
   if (!isAuthenticated) {

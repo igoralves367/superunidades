@@ -120,17 +120,16 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
   const handleSave = async (
     unitId: string,
     validacaoResultados: Record<string, ValidacaoResultadoEntry>,
-    rankingResultados: Record<string, RankingProgressEntry>
+    rankingResultados: Record<string, RankingProgressEntry>,
+    close = false
   ) => {
     if (!selectedQuarter) return;
     setSaving(true);
     try {
-      // Salva rascunho de validação
       await fs.saveValidacaoResult(clubeId, selectedQuarter.id, unitId, validacaoResultados, {
         id: user.id, nome: user.nome, email: user.email,
       });
 
-      // Aplica ao ranking só os confirmados (merge com o progresso existente)
       if (Object.keys(rankingResultados).length > 0) {
         const existing = getRankingDoc(unitId)?.resultados || {};
         const merged = { ...existing, ...rankingResultados };
@@ -140,7 +139,7 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
       }
 
       await loadData();
-      setOpenUnitId(null);
+      if (close) setOpenUnitId(null);
     } catch (error) {
       console.error('Erro ao salvar validações:', error);
       alert('Erro ao salvar. Tente novamente.');
@@ -204,8 +203,8 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
           classes={classes}
           autoFrequencia={autoFrequenciaByUnit.get(openUnit.id) || null}
           canEdit={canEditUnit(openUnit.id) && !saving}
-          onSave={(validacaoResultados, rankingResultados) =>
-            handleSave(openUnit.id, validacaoResultados, rankingResultados)
+          onSave={(validacaoResultados, rankingResultados, close) =>
+            handleSave(openUnit.id, validacaoResultados, rankingResultados, close)
           }
           onClose={() => setOpenUnitId(null)}
         />

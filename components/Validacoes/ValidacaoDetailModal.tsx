@@ -32,16 +32,26 @@ interface ValidacaoDetailModalProps {
   canEdit: boolean;
   onSave: (
     validacaoResultados: Record<string, ValidacaoResultadoEntry>,
-    rankingResultados: Record<string, RankingProgressEntry>
+    rankingResultados: Record<string, RankingProgressEntry>,
+    close?: boolean
   ) => Promise<void>;
   onClose: () => void;
 }
 
 type ValidationState = Record<string, ValidacaoResultadoEntry>;
+type TabKey = 'frequencia' | 'cultos' | 'pg' | 'devocional' | 'classes';
 
 const MANUAL_TIPOS = ['frequencia-cultos', 'frequentar-pg', 'devocional-pessoal', 'classes'] as const;
 const AUTO_TIPOS = ['frequencia-conselheiros', 'frequencia-reunioes-clube'] as const;
 const ALL_TIPOS = [...AUTO_TIPOS, ...MANUAL_TIPOS] as const;
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'frequencia', label: 'Frequência' },
+  { key: 'cultos', label: 'Cultos' },
+  { key: 'pg', label: 'PG' },
+  { key: 'devocional', label: 'Devocional' },
+  { key: 'classes', label: 'Classes' },
+];
 
 function toValidacaoEntry(entry: RankingProgressEntry): ValidacaoResultadoEntry {
   return {
@@ -91,6 +101,8 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
   const [state, setState] = useState<ValidationState>({});
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('frequencia');
 
   const reqByTipo = useMemo(() => {
     const map = new Map<string, RankingRequirement>();
@@ -101,7 +113,6 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
   const findReq = (tipo: string) => reqByTipo.get(requirementId(quarter.number, tipo));
 
   useEffect(() => {
-    // Inicializar a partir do doc de validação (rascunho) ou do ranking (já confirmados)
     const base = buildRankingProgressState(requirements, rankingProgress?.resultados);
     const draft: ValidationState = {};
 
@@ -123,7 +134,6 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
       }
     });
 
-    // Auto-cálculo para frequência
     if (autoFrequencia) {
       const conselheirosReq = findReq('frequencia-conselheiros');
       if (conselheirosReq) {
@@ -154,7 +164,6 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
 
     setState(draft);
 
-    // Pré-marcar como confirmados os que já foram aplicados ao ranking
     const alreadyConfirmed = new Set<string>();
     ALL_TIPOS.forEach(tipo => {
       const req = findReq(tipo);
@@ -171,46 +180,51 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
       const current = prev[req.id];
       const merged: RankingProgressEntry = { ...toRankingEntry(current), ...patch };
       const breakdown = calculateRequirementBreakdown(req, merged);
-      return {
-        ...prev,
-        [req.id]: toValidacaoEntry({ ...merged, ...breakdown }),
-      };
+      return { ...prev, [req.id]: toValidacaoEntry({ ...merged, ...breakdown }) };
     });
   };
 
   const toggleConfirm = (reqId: string) => {
     setConfirmed(prev => {
       const next = new Set(prev);
-      if (next.has(reqId)) next.delete(reqId);
-      else next.add(reqId);
+      if (next.has(reqId)) next.delete(reqId); else next.add(reqId);
       return next;
     });
   };
 
-  const handleSave = async () => {
+  const buildPayload = () => {
+    const validacaoResultados: Record<string, ValidacaoResultadoEntry> = {};
+    ALL_TIPOS.forEach(tipo => {
+      const req = findReq(tipo);
+      if (!req) return;
+      validacaoResultados[req.id] = {
+        ...state[req.id],
+        validacaoMeta: { ...state[req.id]?.validacaoMeta, confirmadoRanking: confirmed.has(req.id) },
+      };
+    });
+    const rankingResultados: Record<string, RankingProgressEntry> = {};
+    confirmed.forEach(reqId => {
+      if (state[reqId]) rankingResultados[reqId] = toRankingEntry(state[reqId]);
+    });
+    return { validacaoResultados, rankingResultados };
+  };
+
+  const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      // Validações: salva tudo + flag confirmado por entry
-      const validacaoResultados: Record<string, ValidacaoResultadoEntry> = {};
-      ALL_TIPOS.forEach(tipo => {
-        const req = findReq(tipo);
-        if (!req) return;
-        validacaoResultados[req.id] = {
-          ...state[req.id],
-          validacaoMeta: {
-            ...state[req.id]?.validacaoMeta,
-            confirmadoRanking: confirmed.has(req.id),
-          },
-        };
-      });
+      const { validacaoResultados, rankingResultados } = buildPayload();
+      await onSave(validacaoResultados, rankingResultados, false);
+      setSavedAt(new Date());
+    } finally {
+      setSaving(false);
+    }
+  };
 
-      // Ranking: só os confirmados
-      const rankingResultados: Record<string, RankingProgressEntry> = {};
-      confirmed.forEach(reqId => {
-        if (state[reqId]) rankingResultados[reqId] = toRankingEntry(state[reqId]);
-      });
-
-      await onSave(validacaoResultados, rankingResultados);
+  const handleSaveAndClose = async () => {
+    setSaving(true);
+    try {
+      const { validacaoResultados, rankingResultados } = buildPayload();
+      await onSave(validacaoResultados, rankingResultados, true);
     } finally {
       setSaving(false);
     }
@@ -220,6 +234,9 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
   const reunioesReq = findReq('frequencia-reunioes-clube');
   const conselheirosPoints = conselheirosReq ? (state[conselheirosReq.id]?.calculatedPoints ?? 0) : 0;
   const reunioesPoints = reunioesReq ? (state[reunioesReq.id]?.calculatedPoints ?? 0) : 0;
+
+  const confirmedCount = confirmed.size;
+  const totalConfirmedPts = [...confirmed].reduce((sum, id) => sum + (state[id]?.calculatedPoints ?? 0), 0);
 
   const renderConfirmToggle = (reqId: string) => {
     const isConfirmed = confirmed.has(reqId);
@@ -235,100 +252,207 @@ export const ValidacaoDetailModal: React.FC<ValidacaoDetailModalProps> = ({
         }`}
       >
         {isConfirmed ? <CheckCircle2 size={13} /> : <Circle size={13} />}
-        {isConfirmed ? 'Confirmado para ranking' : 'Confirmar para ranking'}
+        {isConfirmed ? 'Confirmado' : 'Confirmar para ranking'}
       </button>
     );
   };
 
-  const renderAutoSection = (tipo: (typeof AUTO_TIPOS)[number], label: string, points: number) => {
-    const req = findReq(tipo);
-    if (!req) return null;
-    return (
-      <div key={tipo} className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="font-black text-gray-100 text-sm">{label}</span>
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-black ${points < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{points} pts</span>
-            {renderConfirmToggle(req.id)}
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'frequencia': {
+        return (
+          <div className="space-y-4">
+            <FrequenciaAutoCard
+              auto={autoFrequencia}
+              conselheirosPoints={conselheirosPoints}
+              reunioesPoints={reunioesPoints}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {conselheirosReq && (
+                <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black text-gray-300">Conselheiros</p>
+                    <p className={`text-lg font-black ${conselheirosPoints < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{conselheirosPoints} pts</p>
+                  </div>
+                  {renderConfirmToggle(conselheirosReq.id)}
+                </div>
+              )}
+              {reunioesReq && (
+                <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black text-gray-300">Reuniões do Clube</p>
+                    <p className={`text-lg font-black ${reunioesPoints < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{reunioesPoints} pts</p>
+                  </div>
+                  {reunioesReq && renderConfirmToggle(reunioesReq.id)}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-    );
-  };
+        );
+      }
 
-  const renderManualForm = (tipo: (typeof MANUAL_TIPOS)[number]) => {
-    const req = findReq(tipo);
-    if (!req) return null;
-    const entry = state[req.id];
-    const rankingEntry = entry ? toRankingEntry(entry) : undefined;
-    const points = entry?.calculatedPoints ?? 0;
+      case 'cultos':
+      case 'pg': {
+        const tipo = activeTab === 'cultos' ? 'frequencia-cultos' : 'frequentar-pg';
+        const req = findReq(tipo);
+        if (!req) return <p className="text-sm text-gray-500 text-center py-8">Requisito não encontrado.</p>;
+        const entry = state[req.id];
+        const points = entry?.calculatedPoints ?? 0;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xl font-black ${points > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>{points} pts</span>
+              {renderConfirmToggle(req.id)}
+            </div>
+            <ManualValidacaoForm
+              requirement={req}
+              entry={entry ? toRankingEntry(entry) : undefined}
+              desbravadores={desbravadores}
+              disabled={!canEdit}
+              onChange={p => handleChange(req, p)}
+            />
+          </div>
+        );
+      }
 
-    let body: React.ReactNode;
-    if (tipo === 'devocional-pessoal') {
-      body = <DevocionallForm requirement={req} entry={rankingEntry} desbravadores={desbravadores} disabled={!canEdit} onChange={p => handleChange(req, p)} />;
-    } else if (tipo === 'classes') {
-      body = <ClassesForm requirement={req} entry={rankingEntry} desbravadores={desbravadores} classes={classes} disabled={!canEdit} onChange={p => handleChange(req, p)} />;
-    } else {
-      body = <ManualValidacaoForm requirement={req} entry={rankingEntry} disabled={!canEdit} onChange={p => handleChange(req, p)} />;
+      case 'devocional': {
+        const req = findReq('devocional-pessoal');
+        if (!req) return <p className="text-sm text-gray-500 text-center py-8">Requisito não encontrado.</p>;
+        const entry = state[req.id];
+        const points = entry?.calculatedPoints ?? 0;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xl font-black ${points > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>{points} pts</span>
+              {renderConfirmToggle(req.id)}
+            </div>
+            <DevocionallForm
+              requirement={req}
+              entry={entry ? toRankingEntry(entry) : undefined}
+              desbravadores={desbravadores}
+              disabled={!canEdit}
+              onChange={p => handleChange(req, p)}
+            />
+          </div>
+        );
+      }
+
+      case 'classes': {
+        const req = findReq('classes');
+        if (!req) return <p className="text-sm text-gray-500 text-center py-8">Requisito não encontrado.</p>;
+        const entry = state[req.id];
+        const points = entry?.calculatedPoints ?? 0;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xl font-black ${points > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>{points} pts</span>
+              {renderConfirmToggle(req.id)}
+            </div>
+            <ClassesForm
+              requirement={req}
+              entry={entry ? toRankingEntry(entry) : undefined}
+              desbravadores={desbravadores}
+              classes={classes}
+              disabled={!canEdit}
+              onChange={p => handleChange(req, p)}
+            />
+          </div>
+        );
+      }
     }
-
-    return (
-      <details key={req.id} open className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A]">
-        <summary className="cursor-pointer px-4 py-3 flex items-center justify-between gap-2 flex-wrap">
-          <span className="font-black text-gray-100">{req.name}</span>
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-black ${points < 0 ? 'text-red-400' : 'text-emerald-400'}`}>{points} pts</span>
-            {renderConfirmToggle(req.id)}
-          </div>
-        </summary>
-        <div className="p-4 pt-2">{body}</div>
-      </details>
-    );
   };
 
-  const confirmedCount = confirmed.size;
-  const totalConfirmedPts = [...confirmed].reduce((sum, id) => sum + (state[id]?.calculatedPoints ?? 0), 0);
+  const getTabPoints = (tab: TabKey): number => {
+    const tipoMap: Record<TabKey, string[]> = {
+      frequencia: ['frequencia-conselheiros', 'frequencia-reunioes-clube'],
+      cultos: ['frequencia-cultos'],
+      pg: ['frequentar-pg'],
+      devocional: ['devocional-pessoal'],
+      classes: ['classes'],
+    };
+    return tipoMap[tab].reduce((sum, tipo) => {
+      const req = findReq(tipo);
+      return sum + (req ? (state[req.id]?.calculatedPoints ?? 0) : 0);
+    }, 0);
+  };
 
   return (
-    <Modal isOpen onClose={onClose} title={`Validações — ${unit.nome}`} icon={<ShieldCheck size={20} className="text-[#E53935]" />} maxWidthClassName="max-w-3xl">
-      <div className="space-y-5">
+    <Modal isOpen onClose={onClose} title={`Validações — ${unit.nome}`} icon={<ShieldCheck size={20} className="text-[#E53935]" />} maxWidthClassName="max-w-2xl">
+      <div className="space-y-4">
 
-        <div>
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-3">Frequência (calculado automaticamente)</p>
-          <FrequenciaAutoCard auto={autoFrequencia} conselheirosPoints={conselheirosPoints} reunioesPoints={reunioesPoints} />
-          <div className="flex gap-2 mt-2 flex-wrap">
-            {conselheirosReq && renderAutoSection('frequencia-conselheiros', 'Conselheiros', conselheirosPoints)}
-            {reunioesReq && renderAutoSection('frequencia-reunioes-clube', 'Reuniões do Clube', reunioesPoints)}
-          </div>
+        {/* Abas */}
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {TABS.map(tab => {
+            const pts = getTabPoints(tab.key);
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-shrink-0 px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors ${
+                  isActive
+                    ? 'bg-[#E53935]/15 border border-[#E53935]/40 text-[#E53935]'
+                    : 'bg-[#111827] border border-[#1F2937] text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {tab.label}
+                {pts !== 0 && (
+                  <span className={`ml-1.5 ${pts > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {pts > 0 ? `+${pts}` : pts}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="space-y-3">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Validações manuais</p>
-          {MANUAL_TIPOS.map(renderManualForm)}
+        {/* Conteúdo da aba */}
+        <div className="min-h-[280px]">
+          {renderTabContent()}
         </div>
 
+        {/* Resumo confirmados */}
         {confirmedCount > 0 && (
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 flex items-center justify-between gap-3">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-emerald-300 text-sm font-bold">
               <CheckCircle2 size={16} />
-              {confirmedCount} validação(ões) confirmada(s) para o ranking
+              {confirmedCount} confirmada(s) para o ranking
             </div>
             <span className="font-black text-emerald-300">{totalConfirmedPts} pts</span>
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-[#1F2937]">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-xs font-black uppercase tracking-widest text-gray-300">
-            Fechar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !canEdit}
-            className="px-5 py-2 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
-          >
-            {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-            Salvar validações
-          </button>
+        {/* Rodapé */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1F2937]">
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-xs font-black uppercase tracking-widest text-gray-300">
+              Fechar
+            </button>
+            {savedAt && (
+              <span className="text-[11px] text-emerald-400 font-bold">
+                ✓ Salvo às {savedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveDraft}
+              disabled={saving || !canEdit}
+              className="px-4 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-xs font-black uppercase tracking-widest text-gray-300 disabled:opacity-60 flex items-center gap-2 hover:border-gray-500"
+            >
+              {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+              Salvar rascunho
+            </button>
+            <button
+              onClick={handleSaveAndClose}
+              disabled={saving || !canEdit}
+              className="px-5 py-2 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
+            >
+              {saving ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+              Salvar e fechar
+            </button>
+          </div>
         </div>
       </div>
     </Modal>

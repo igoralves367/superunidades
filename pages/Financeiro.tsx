@@ -1582,15 +1582,17 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     const isActive = activeTab === tab;
     return (
       <button
+        type="button"
         onClick={() => setActiveTab(tab)}
-        className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-bold transition-all ${
+        aria-pressed={isActive}
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl font-semibold transition-colors border ${
           isActive
-            ? 'bg-[#E53935] text-white shadow-lg shadow-[#E53935]/30'
-            : 'bg-[#111827] text-gray-400 border border-[#1F2937] hover:bg-[#1F2937] hover:text-white'
-        }`}
+            ? 'bg-[#111827] border-[#E53935]/35 text-white'
+            : 'bg-transparent border-[#1F2937] text-gray-400 hover:bg-[#111827] hover:text-gray-200'
+        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E53935]/35 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F1A]`}
       >
-        <Icon size={18} />
-        {label}
+        <Icon size={18} className={isActive ? 'text-[#E53935]' : ''} />
+        <span className="whitespace-nowrap">{label}</span>
       </button>
     );
   };
@@ -1598,48 +1600,50 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const renderGeral = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-[#0B0F1A] to-[#111827] border border-[#1F2937] p-6 rounded-[28px] shadow-xl relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-[#00F5A0]/10 rounded-full blur-xl group-hover:bg-[#00F5A0]/20 transition-all" />
+        <div className="bg-[#111827] border border-[#1F2937] p-6 rounded-[24px] shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-[#00F5A0]/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center">
               <ArrowUpRight size={20} className="text-[#00F5A0]" />
             </div>
-            <p className="text-gray-400 font-bold uppercase tracking-wider text-xs">Total Entradas</p>
+            <p className="text-gray-400 font-semibold text-sm">Total de entradas</p>
           </div>
           <p className="text-3xl font-black text-white">{formatCurrency(totalEntradas)}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-[#0B0F1A] to-[#111827] border border-[#1F2937] p-6 rounded-[28px] shadow-xl relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-24 h-24 bg-[#E53935]/10 rounded-full blur-xl group-hover:bg-[#E53935]/20 transition-all" />
+        <div className="bg-[#111827] border border-[#1F2937] p-6 rounded-[24px] shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-[#E53935]/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center">
               <ArrowDownRight size={20} className="text-[#E53935]" />
             </div>
-            <p className="text-gray-400 font-bold uppercase tracking-wider text-xs">Total Saídas</p>
+            <p className="text-gray-400 font-semibold text-sm">Total de saídas</p>
           </div>
           <p className="text-3xl font-black text-white">{formatCurrency(totalSaidas)}</p>
         </div>
 
-        <div className="bg-gradient-to-r from-[#E53935] to-[#B71C1C] border border-red-500/50 p-6 rounded-[28px] shadow-[0_10px_40px_rgba(229,57,53,0.3)] relative overflow-hidden">
-          <div className="absolute right-0 bottom-0 opacity-10">
-            <Wallet size={120} strokeWidth={1} className="-mb-8 -mr-8" />
-          </div>
+        <div className="bg-[#111827] border border-[#1F2937] p-6 rounded-[24px] shadow-sm">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-              <Activity size={20} className="text-white" />
+            <div className="w-10 h-10 rounded-xl bg-[#0B0F1A] border border-[#1F2937] flex items-center justify-center">
+              <Activity size={20} className="text-[#FFD60A]" />
             </div>
-            <p className="text-white/80 font-bold uppercase tracking-wider text-xs">Saldo Dinâmico</p>
+            <p className="text-gray-400 font-semibold text-sm">Saldo atual</p>
           </div>
           <p className="text-4xl font-black text-white">{formatCurrency(saldoAtual)}</p>
+          <p className="text-xs text-gray-500 mt-2">
+            Entradas menos saídas do período carregado.
+          </p>
         </div>
       </div>
 
-      <div className="bg-[#111827] border border-[#1F2937] rounded-[28px] p-6 shadow-xl">
+      <div className="bg-[#111827] border border-[#1F2937] rounded-[24px] p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-black uppercase text-white">Últimos Lançamentos</h3>
+          <div>
+            <h3 className="text-lg font-bold text-white">Últimos lançamentos</h3>
+            <p className="text-xs text-gray-500 mt-1">Resumo do caixa geral (mais recente primeiro).</p>
+          </div>
           <button
+            type="button"
             onClick={() => setIsCaixaModalOpen(true)}
-            className="flex items-center gap-2 bg-[#E53935]/10 text-[#E53935] px-4 py-2 rounded-xl text-sm font-bold hover:bg-[#E53935]/20 transition-all"
+            className="flex items-center gap-2 bg-[#E53935] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#f44336] transition-colors"
           >
             <Plus size={16} /> Novo Lançamento
           </button>
@@ -1652,7 +1656,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
             {caixa.slice(0, 8).map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between p-4 bg-[#0B0F1A] border border-[#1F2937] rounded-2xl group flex-wrap gap-4"
+                className="flex items-center justify-between p-4 bg-[#0B0F1A] border border-[#1F2937] rounded-2xl flex-wrap gap-4 hover:border-[#374151] transition-colors"
               >
                 <div className="flex items-center gap-4">
                   <div
@@ -1668,7 +1672,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                   </div>
                   <div>
                     <h4 className="font-bold text-gray-200">{item.descricao}</h4>
-                    <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">
+                    <p className="text-xs text-gray-500">
                       {new Date(item.data).toLocaleDateString('pt-BR')} • {item.categoria || 'Sem categoria'}
                     </p>
                   </div>
@@ -2600,6 +2604,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                     {pag ? (
                                       <>
                                         <button
+                                          type="button"
                                           onClick={() => {
                                             setSocioSelecionado(socio);
                                             setEditingPagamento(pag);
@@ -2610,15 +2615,18 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                             setPagQtdParcelas(1);
                                             setIsPagamentoSocioModalOpen(true);
                                           }}
-                                          className="text-gray-600 hover:text-[#FFD60A]"
+                                          aria-label={`Editar pagamento de ${formatMesRef(mes)} de ${socio.nome}`}
+                                          className="p-1.5 rounded-lg text-gray-600 hover:text-[#FFD60A] hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD60A]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F1A]"
                                           title="Editar"
                                         >
                                           <Pencil size={10} />
                                         </button>
                                         <button
+                                          type="button"
                                           onClick={() => handleDeletePagamentoSocio(pag.id)}
                                           disabled={deletingPagamentoId === pag.id}
-                                          className="text-red-400/50 hover:text-red-400 ml-0.5"
+                                          aria-label={`Remover pagamento de ${formatMesRef(mes)} de ${socio.nome}`}
+                                          className="p-1.5 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F1A] disabled:opacity-60 disabled:hover:bg-transparent ml-0.5"
                                           title="Remover"
                                         >
                                           <Trash2 size={10} />
@@ -2626,6 +2634,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                       </>
                                     ) : (
                                       <button
+                                        type="button"
                                         onClick={() => {
                                           setSocioSelecionado(socio);
                                           setEditingPagamento(null);
@@ -2636,7 +2645,8 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                                           setPagQtdParcelas(1);
                                           setIsPagamentoSocioModalOpen(true);
                                         }}
-                                        className="text-gray-600 hover:text-green-400"
+                                        aria-label={`Registrar pagamento de ${formatMesRef(mes)} para ${socio.nome}`}
+                                        className="p-1.5 rounded-lg text-gray-600 hover:text-green-400 hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F1A]"
                                         title="Registrar pagamento"
                                       >
                                         <Plus size={11} />
@@ -2671,10 +2681,9 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
     );
 
     const renderPorUnidade = () => {
-      const sociosSemPagamento = sociosAtivos.filter(s => !socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios));
       const grupos: Record<string, { nome: string; socios: Socio[] }> = {};
 
-      sociosSemPagamento.forEach(s => {
+      sociosAtivos.forEach(s => {
         const key = s.unidadeId || '__sem_unidade__';
         if (!grupos[key]) {
           const unidade = s.unidadeId ? unidadesMap.get(s.unidadeId) : null;
@@ -2685,37 +2694,152 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
 
       const entries = Object.entries(grupos).sort((a, b) => a[1].nome.localeCompare(b[1].nome, 'pt-BR'));
 
+      const buildTextoUnidade = (nome: string, socios: Socio[]) => {
+        const linhas: string[] = [
+          `📋 *Sócios — ${nome}*`,
+          `📅 ${formatMesRef(mesFiltroSocios)}`,
+          `─────────────────────`,
+        ];
+        socios.forEach(s => {
+          const emDia = socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios);
+          linhas.push(`${emDia ? '✅' : '❌'} ${s.nome}  ${formatCurrency(s.valorMensal)}`);
+        });
+        const emDiaList = socios.filter(s => socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios));
+        const pendentes = socios.filter(s => !socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios));
+        linhas.push(`─────────────────────`);
+        linhas.push(`✅ Em dia: ${emDiaList.length} — ${formatCurrency(emDiaList.reduce((a, s) => a + s.valorMensal, 0))}`);
+        if (pendentes.length > 0)
+          linhas.push(`❌ Pendente: ${pendentes.length} — ${formatCurrency(pendentes.reduce((a, s) => a + s.valorMensal, 0))}`);
+        linhas.push(`💰 Total esperado: ${formatCurrency(socios.reduce((a, s) => a + s.valorMensal, 0))}`);
+        return linhas.join('\n');
+      };
+
+      if (entries.length === 0) {
+        return (
+          <div className="border border-dashed border-[#1F2937] p-10 rounded-[28px] text-center">
+            <p className="text-gray-500 font-bold">Nenhum sócio ativo cadastrado.</p>
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-4">
-          {entries.length === 0 ? (
-            <div className="border border-dashed border-[#1F2937] p-10 rounded-[28px] text-center">
-              <p className="text-green-400 font-bold">Todos os sócios estão em dia em {formatMesRef(mesFiltroSocios)}!</p>
-            </div>
-          ) : (
-            entries.map(([key, grupo]) => (
-              <div key={key} className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-black text-white">{grupo.nome}</h4>
-                  <span className="text-[10px] uppercase font-black tracking-widest text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20">
-                    {grupo.socios.length} inadimplente{grupo.socios.length > 1 ? 's' : ''}
-                  </span>
+          <div className="flex justify-end">
+            <button
+              onClick={() => navigator.clipboard.writeText(entries.map(([, g]) => buildTextoUnidade(g.nome, g.socios)).join('\n\n'))}
+              className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-[#25D366] border border-[#1F2937] px-3 py-2 rounded-xl hover:border-[#25D366]/40 transition-all"
+            >
+              <Copy size={13} /> Copiar todas as unidades
+            </button>
+          </div>
+
+          {entries.map(([key, grupo]) => {
+            const emDiaList = grupo.socios.filter(s => socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios));
+            const pendentesCount = grupo.socios.length - emDiaList.length;
+            const totalEsperado = grupo.socios.reduce((acc, s) => acc + s.valorMensal, 0);
+
+            return (
+              <div key={key} className="bg-[#0B0F1A] border border-[#1F2937] rounded-2xl overflow-hidden">
+                {/* Header da unidade */}
+                <div className="px-5 py-4 border-b border-[#1F2937] flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <h4 className="font-black text-white uppercase tracking-tight">{grupo.nome}</h4>
+                    <span className="text-[10px] font-black text-[#22C55E] bg-[#22C55E]/10 px-2 py-0.5 rounded-full border border-[#22C55E]/20">
+                      {emDiaList.length} em dia
+                    </span>
+                    {pendentesCount > 0 && (
+                      <span className="text-[10px] font-black text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full border border-red-400/20">
+                        {pendentesCount} pendente{pendentesCount > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-black text-[#FFD60A]">{formatCurrency(totalEsperado)}/mês</span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(buildTextoUnidade(grupo.nome, grupo.socios))}
+                      className="flex items-center gap-1.5 text-[11px] font-black text-gray-400 hover:text-[#25D366] border border-[#1F2937] px-2.5 py-1.5 rounded-lg hover:border-[#25D366]/40 transition-all"
+                      title="Copiar para WhatsApp"
+                    >
+                      <Copy size={12} /> WhatsApp
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {grupo.socios.map(s => (
-                    <div key={s.id} className="flex items-center justify-between py-2 border-t border-[#1F2937] first:border-0">
-                      <span className="text-sm text-gray-300">{s.nome}</span>
-                      <span className="text-sm font-bold text-red-400">{formatCurrency(s.valorMensal)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 pt-3 border-t border-[#1F2937] flex justify-end">
-                  <span className="text-xs font-black text-gray-500">
-                    Total em atraso: <span className="text-red-400">{formatCurrency(grupo.socios.reduce((acc, s) => acc + s.valorMensal, 0))}</span>
-                  </span>
+
+                {/* Lista de sócios */}
+                <div className="divide-y divide-[#1F2937]">
+                  {grupo.socios.map(s => {
+                    const emDia = socioEstaEmDia(s.id, mesFiltroSocios, pagamentosSocios);
+                    const expandido = sociosExpandidos.has(s.id);
+                    const pagSocio = pagamentosSocios.filter(p => p.socioId === s.id);
+
+                    return (
+                      <div key={s.id}>
+                        <div className="flex items-center justify-between px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${emDia ? 'bg-[#22C55E]' : 'bg-red-400'}`} />
+                            <span className="text-sm font-bold text-white">{s.nome}</span>
+                            <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full border ${emDia ? 'text-[#22C55E] bg-[#22C55E]/10 border-[#22C55E]/20' : 'text-red-400 bg-red-400/10 border-red-400/20'}`}>
+                              {emDia ? 'Em dia' : 'Pendente'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-black text-[#FFD60A]">{formatCurrency(s.valorMensal)}</span>
+                            <button
+                              onClick={() => toggleSocioExpandido(s.id)}
+                              className="text-gray-500 hover:text-white p-1"
+                            >
+                              <ChevronDown size={14} className={`transition-transform ${expandido ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {expandido && (() => {
+                          const mesesPagos = pagSocio.map(p => p.mesReferencia);
+                          const mesAtual = getCurrentMesRef();
+                          const mesInicio = s.mesIngresso || mesAtual;
+                          const mesesBase: string[] = [];
+                          let cur = mesInicio;
+                          while (cur <= mesAtual) { mesesBase.push(cur); cur = addMonths(cur, 1); }
+                          const todosMeses = [...new Set([...mesesPagos, ...mesesBase])].sort((a, b) => b.localeCompare(a));
+
+                          return (
+                            <div className="px-5 pb-4 pt-2 border-t border-[#1F2937] bg-[#111827]/40">
+                              <p className="text-[10px] uppercase font-black tracking-widest text-gray-500 mb-3">
+                                Parcelas {s.mesIngresso ? `· desde ${formatMesRef(s.mesIngresso)}` : ''}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {todosMeses.map(mes => {
+                                  const pag = pagSocio.find(p => p.mesReferencia === mes);
+                                  const pago = !!pag;
+                                  const futuro = mes > mesAtual;
+                                  return (
+                                    <div
+                                      key={mes}
+                                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-black border ${
+                                        pago
+                                          ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20'
+                                          : futuro
+                                          ? 'bg-[#1F2937]/50 text-gray-600 border-[#1F2937]'
+                                          : 'bg-red-400/10 text-red-400 border-red-400/20'
+                                      }`}
+                                    >
+                                      <span>{pago ? '✓' : futuro ? '·' : '✗'}</span>
+                                      <span>{formatMesRef(mes)}</span>
+                                      {pag && <span className="opacity-60">{formatCurrency(pag.valorPago)}</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
       );
     };
@@ -2745,12 +2869,14 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           </div>
         </div>
 
-        <div className="flex gap-2 bg-[#0B0F1A]/50 p-1.5 rounded-2xl border border-[#1F2937] w-fit">
+        <div className="flex gap-2 bg-[#0B0F1A]/50 p-1.5 rounded-2xl border border-[#1F2937] w-full overflow-x-auto no-scrollbar">
           {(['LISTA', 'POR_UNIDADE'] as const).map(tab => (
             <button
+              type="button"
               key={tab}
               onClick={() => setSocioSubTab(tab)}
-              className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${socioSubTab === tab ? 'bg-[#FFD60A] text-black shadow-[0_0_12px_rgba(255,214,10,0.3)]' : 'text-gray-400 hover:text-white'}`}
+              aria-pressed={socioSubTab === tab}
+              className={`px-4 py-2 rounded-xl text-sm font-black transition-all shrink-0 ${socioSubTab === tab ? 'bg-[#FFD60A] text-black shadow-[0_0_12px_rgba(255,214,10,0.3)]' : 'text-gray-400 hover:text-white'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFD60A]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F1A]`}
             >
               {tab === 'LISTA' ? 'Lista de Sócios' : 'Por Unidade'}
             </button>
@@ -2765,14 +2891,16 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   return (
     <div className="max-w-6xl mx-auto pb-10">
       <header className="mb-10">
-        <h1 className="text-3xl font-black tracking-tight text-white mb-2">Painel Financeiro</h1>
-        <p className="text-gray-400 font-medium">Controle de entradas, saídas, campanhas, sócios e eventos.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-white mb-2">Financeiro</h1>
+        <p className="text-gray-400">Controle de caixa, campanhas, sócios e eventos.</p>
 
-        <div className="flex flex-wrap items-center gap-3 mt-6 bg-[#0B0F1A]/50 p-2 rounded-3xl border border-[#1F2937] w-fit">
-          <NavButton tab="GERAL" icon={Wallet} label="Geral" />
-          <NavButton tab="CAMPANHAS" icon={ShoppingBag} label="Campanhas de Vendas" />
-          <NavButton tab="CAMPORI" icon={Tent} label="Eventos" />
-          <NavButton tab="SOCIOS" icon={Users} label="Sócios" />
+        <div className="mt-6 bg-[#0B0F1A]/50 p-2 rounded-3xl border border-[#1F2937] max-w-full overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-3 min-w-max">
+            <NavButton tab="GERAL" icon={Wallet} label="Geral" />
+            <NavButton tab="CAMPANHAS" icon={ShoppingBag} label="Campanhas de Vendas" />
+            <NavButton tab="CAMPORI" icon={Tent} label="Eventos" />
+            <NavButton tab="SOCIOS" icon={Users} label="Sócios" />
+          </div>
         </div>
       </header>
 

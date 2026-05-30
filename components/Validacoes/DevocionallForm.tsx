@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Desbravador, RankingProgressEntry, RankingRequirement } from '../../types';
 
 interface DevocionallFormProps {
@@ -9,10 +9,6 @@ interface DevocionallFormProps {
   onChange: (patch: Partial<RankingProgressEntry>) => void;
 }
 
-/**
- * Devocional Pessoal: pontos base ao confirmar e bônus por desbravador não batizado
- * presente na Escola Sabatina.
- */
 export const DevocionallForm: React.FC<DevocionallFormProps> = ({
   requirement,
   entry,
@@ -20,65 +16,139 @@ export const DevocionallForm: React.FC<DevocionallFormProps> = ({
   disabled,
   onChange,
 }) => {
-  const naoBatizados = desbravadores.filter(d => d.batizado !== true);
-  const quantidade = entry?.quantity ?? 0;
+  const ativos = desbravadores.filter(d => d.status === 'ATIVO');
+  const naoBatizados = new Set(ativos.filter(d => d.batizado !== true).map(d => d.id));
 
-  const handleQuantidade = (value: number) => {
-    const qtd = Math.max(0, value);
+  const confirmedIds = new Set<string>(
+    (entry?.notes || '').split(',').map(s => s.trim()).filter(Boolean)
+  );
+
+  const savedMin = entry?.validacaoMeta?.devocionaMinPercent ?? 100;
+  const [minPercent, setMinPercent] = useState(savedMin);
+
+  const apply = (ids: Set<string>, min: number) => {
+    const validIds = ativos.filter(d => ids.has(d.id)).map(d => d.id);
+    const pct = ativos.length > 0 ? Math.round((validIds.length / ativos.length) * 100) : 0;
+    const confirmedNaoBatizados = validIds.filter(id => naoBatizados.has(id)).length;
     onChange({
-      quantity: qtd,
-      bonusInput: qtd,
-      validacaoMeta: { ...entry?.validacaoMeta, quantidadeNaoBatizados: qtd },
+      completed: pct >= min,
+      notes: validIds.join(','),
+      quantity: validIds.length,
+      bonusInput: confirmedNaoBatizados,
+      validacaoMeta: {
+        ...entry?.validacaoMeta,
+        devocionaPercent: pct,
+        devocionaMinPercent: min,
+        quantidadeNaoBatizados: confirmedNaoBatizados,
+      },
     });
   };
 
+  const toggle = (id: string) => {
+    const next = new Set(confirmedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    apply(next, minPercent);
+  };
+
+  const toggleAll = () => {
+    const next: Set<string> = confirmedIds.size >= ativos.length
+      ? new Set<string>()
+      : new Set<string>(ativos.map(d => d.id));
+    apply(next, minPercent);
+  };
+
+  const handleMinPercent = (value: number) => {
+    const clamped = Math.max(1, Math.min(100, value));
+    setMinPercent(clamped);
+    apply(confirmedIds, clamped);
+  };
+
+  const confirmedCount = ativos.filter(d => confirmedIds.has(d.id)).length;
+  const pct = ativos.length > 0 ? Math.round((confirmedCount / ativos.length) * 100) : 0;
+  const confirmedNaoBatizados = ativos.filter(d => confirmedIds.has(d.id) && naoBatizados.has(d.id)).length;
+  const bonusValue = requirement.bonusValue ?? 50;
+
   return (
     <div className="space-y-3">
-      <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
-        <input
-          type="checkbox"
-          className="w-4 h-4 accent-[#E53935]"
-          checked={!!entry?.completed}
-          disabled={disabled}
-          onChange={e => onChange({ completed: e.target.checked })}
-        />
-        <span className="text-sm font-bold text-gray-200">
-          Todos realizam devocional e lição da Escola Sabatina ({requirement.points} pts)
-        </span>
-      </label>
-
-      <div className="space-y-1">
-        <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">
-          Não batizados presentes na Escola Sabatina
-        </label>
-        <input
-          type="number"
-          min={0}
-          max={naoBatizados.length || undefined}
-          value={quantidade}
-          disabled={disabled}
-          onChange={e => handleQuantidade(Number(e.target.value))}
-          className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-        />
-        <p className="text-[11px] text-gray-500 ml-1">
-          +{requirement.bonusValue ?? 50} pts por não batizado presente. Unidade tem {naoBatizados.length} não batizado(s).
-        </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-gray-400 font-bold">
+            {confirmedCount}/{ativos.length} confirmados
+          </p>
+          <span className={`px-2 py-0.5 rounded-lg text-[11px] font-black ${pct >= minPercent ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-400'}`}>
+            {pct}%
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={toggleAll}
+          disabled={disabled || ativos.length === 0}
+          className="px-3 py-1.5 rounded-lg border border-[#1F2937] text-[10px] font-black uppercase tracking-widest text-gray-300 hover:bg-white/5 disabled:opacity-60"
+        >
+          {confirmedCount >= ativos.length && ativos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}
+        </button>
       </div>
 
-      {naoBatizados.length > 0 && (
-        <div className="rounded-xl border border-[#1F2937] bg-[#0B0F1A] p-3">
-          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-2">
-            Desbravadores não batizados (referência)
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {naoBatizados.map(d => (
-              <span key={d.id} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-white/5 text-gray-300">
-                {d.nome}
-              </span>
-            ))}
-          </div>
+      {ativos.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[#1F2937] p-5 text-center text-sm text-gray-500">
+          Nenhum desbravador ativo nesta unidade.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#1F2937] bg-[#0B0F1A] divide-y divide-[#1F2937]">
+          {ativos.map(d => (
+            <label key={d.id} className="flex items-center justify-between gap-3 p-3 cursor-pointer hover:bg-white/5">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-[#E53935]"
+                  checked={confirmedIds.has(d.id)}
+                  disabled={disabled}
+                  onChange={() => toggle(d.id)}
+                />
+                <span className="text-sm font-bold text-gray-200">{d.nome}</span>
+              </div>
+              {naoBatizados.has(d.id) && (
+                <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-500/10 text-amber-400">
+                  Não batizado
+                </span>
+              )}
+            </label>
+          ))}
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">
+            % mínimo para pontuar
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={minPercent}
+            disabled={disabled}
+            onChange={e => handleMinPercent(Number(e.target.value))}
+            className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+          />
+          <p className="text-[11px] text-gray-500 ml-1">
+            {pct >= minPercent
+              ? `✓ ${pct}% ≥ ${minPercent}% → ${requirement.points} pts`
+              : `${pct}% < ${minPercent}% → 0 pts`}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">
+            Não batizados confirmados
+          </label>
+          <div className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-3 text-sm font-bold text-gray-200">
+            {confirmedNaoBatizados} de {naoBatizados.size}
+          </div>
+          <p className="text-[11px] text-gray-500 ml-1">
+            +{confirmedNaoBatizados * bonusValue} pts ({confirmedNaoBatizados} × {bonusValue})
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

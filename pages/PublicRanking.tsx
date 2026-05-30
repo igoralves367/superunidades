@@ -122,6 +122,10 @@ const UnitView: React.FC<UnitViewProps> = ({ unit, quarter, requirements, progre
     isRequirementDone(progressDoc?.resultados?.[req.id])
   ).length;
 
+  const totalPoints = requirements.reduce((sum, req) => {
+    return sum + (progressDoc?.resultados?.[req.id]?.calculatedPoints ?? 0);
+  }, 0);
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(0,178,255,0.12),_transparent_25%),linear-gradient(180deg,#050816_0%,#0B0F1A_100%)] text-gray-100">
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12 space-y-6">
@@ -145,6 +149,12 @@ const UnitView: React.FC<UnitViewProps> = ({ unit, quarter, requirements, progre
               {doneCount} de {requirements.length} requisitos cumpridos
             </p>
           </div>
+          <div className="flex justify-center gap-3 pt-2">
+            <div className="rounded-2xl border border-[#FFD60A]/20 bg-[#FFD60A]/5 px-6 py-3">
+              <p className="text-[10px] tracking-[0.25em] uppercase font-black text-gray-500">Pontuação Total</p>
+              <p className="text-3xl font-black text-[#FFD60A] mt-1">{totalPoints}</p>
+            </div>
+          </div>
         </header>
 
         {grouped.map(([category, items]) => (
@@ -154,21 +164,35 @@ const UnitView: React.FC<UnitViewProps> = ({ unit, quarter, requirements, progre
             </div>
             <div className="divide-y divide-white/5">
               {items.map(req => {
-                const done = isRequirementDone(progressDoc?.resultados?.[req.id]);
+                const result = progressDoc?.resultados?.[req.id];
+                const done = isRequirementDone(result);
+                const points = result?.calculatedPoints ?? 0;
+                const bonusPoints = result?.bonusPoints ?? 0;
+                const penaltyPoints = result?.penaltyPoints ?? 0;
                 return (
                   <div key={req.id} className="flex items-center gap-4 px-5 py-4">
                     {done
                       ? <CheckCircle2 size={20} className="text-[#00F5A0] shrink-0" />
                       : <Circle size={20} className="text-gray-700 shrink-0" />
                     }
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className={`text-sm font-bold leading-snug ${done ? 'text-gray-200' : 'text-gray-500'}`}>
                         {req.name}
                       </p>
-                      {req.description && (
+                      {done && (
+                        <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+                          Base +{result?.basePoints ?? 0}
+                          {bonusPoints > 0 && ` | Bônus +${bonusPoints}`}
+                          {penaltyPoints > 0 && ` | Penal -${penaltyPoints}`}
+                        </p>
+                      )}
+                      {!done && req.description && (
                         <p className="text-[11px] text-gray-600 mt-0.5 leading-snug">{req.description}</p>
                       )}
                     </div>
+                    {done && (
+                      <span className="text-sm font-black text-[#FFD60A] shrink-0">+{points}</span>
+                    )}
                   </div>
                 );
               })}
@@ -376,22 +400,44 @@ const RestrictedView: React.FC<RestrictedViewProps> = ({ units, quarter, require
                           <p className="text-[10px] uppercase tracking-[0.25em] font-black text-gray-600 mb-2">{category}</p>
                           <div className="space-y-1.5">
                             {items.map(req => {
-                              const done = isRequirementDone(progressDoc?.resultados?.[req.id]);
+                              const result = progressDoc?.resultados?.[req.id];
+                              const done = isRequirementDone(result);
+                              const points = result?.calculatedPoints ?? 0;
+                              const bonusPoints = result?.bonusPoints ?? 0;
+                              const penaltyPoints = result?.penaltyPoints ?? 0;
                               return (
                                 <div key={req.id} className="flex items-center gap-3 rounded-xl bg-black/20 px-3 py-2.5 border border-white/5">
                                   {done
                                     ? <CheckCircle2 size={14} className="text-[#00F5A0] shrink-0" />
                                     : <Circle size={14} className="text-gray-700 shrink-0" />
                                   }
-                                  <span className={`text-sm font-medium leading-snug ${done ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    {req.name}
-                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <span className={`text-sm font-medium leading-snug ${done ? 'text-gray-300' : 'text-gray-600'}`}>
+                                      {req.name}
+                                    </span>
+                                    {done && (
+                                      <p className="text-[11px] text-gray-500 font-semibold mt-0.5">
+                                        Base +{result?.basePoints ?? 0}
+                                        {bonusPoints > 0 && ` | Bônus +${bonusPoints}`}
+                                        {penaltyPoints > 0 && ` | Penal -${penaltyPoints}`}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {done && (
+                                    <span className="text-sm font-black text-[#FFD60A] shrink-0">+{points}</span>
+                                  )}
                                 </div>
                               );
                             })}
                           </div>
                         </div>
                       ))}
+                      <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+                        <p className="text-[10px] uppercase tracking-[0.25em] font-black text-gray-500">Pontuação Total</p>
+                        <span className="text-xl font-black text-[#FFD60A]">
+                          {requirements.reduce((sum, req) => sum + (progressDoc?.resultados?.[req.id]?.calculatedPoints ?? 0), 0)}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </article>

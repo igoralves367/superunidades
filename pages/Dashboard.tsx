@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Flag, Loader2, Target, Trophy } from 'lucide-react';
+import { ArrowUpRight, Crown, Flag, Loader2, Target, Trophy } from 'lucide-react';
 import { NeonCard } from '../components/NeonCard';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade, Usuario } from '../types';
 import * as fs from '../services/firestoreDb';
@@ -12,6 +12,9 @@ interface DashboardProps {
 
 const buildPublicLink = (clubId: string) =>
   `${window.location.origin}${window.location.pathname}#ranking/${encodeURIComponent(clubId)}`;
+
+const buildWinnerLink = (slug: string) =>
+  `${window.location.origin}${window.location.pathname}#vencedor/${encodeURIComponent(slug)}`;
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate }) => {
   const [loading, setLoading] = useState(true);
@@ -133,12 +136,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate }) => {
         </NeonCard>
 
         <NeonCard color="#FFD60A" className="space-y-4">
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Liderança atual</p>
-            <h2 className="text-2xl font-black text-white mt-2">{leader?.unidade.nome || 'Sem pontuação ainda'}</h2>
-            <p className="text-sm text-gray-500 mt-2">
-              {leader ? `${leader.total} pontos no trimestre selecionado.` : 'Assim que as unidades começarem a ser pontuadas, o ranking aparecerá aqui.'}
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Liderança atual</p>
+              <h2 className="text-2xl font-black text-white mt-2">{leader?.unidade.nome || 'Sem pontuação ainda'}</h2>
+              <p className="text-sm text-gray-500 mt-2">
+                {leader ? `${leader.total} pontos no trimestre selecionado.` : 'Assim que as unidades começarem a ser pontuadas, o ranking aparecerá aqui.'}
+              </p>
+            </div>
+            {publicSlug && (
+              <a
+                href={buildWinnerLink(publicSlug)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-[#FFD60A]/10 border border-[#FFD60A]/30 text-[#FFD60A] text-xs font-bold hover:bg-[#FFD60A]/20 transition-colors"
+              >
+                <Crown size={13} />
+                Ver campeão
+              </a>
+            )}
           </div>
 
           <div className="space-y-3">

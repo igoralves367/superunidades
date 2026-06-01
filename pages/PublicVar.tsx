@@ -105,16 +105,16 @@ const UnitCard: React.FC<UnitCardProps> = ({ position, unidade, requirements, pr
     <div className={`rounded-2xl border ${medalBorder(position)} bg-[#0D1117] overflow-hidden`}>
       {/* Header */}
       <button
-        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-white/5 transition-colors text-left"
+        className="w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 hover:bg-white/5 transition-colors text-left"
         onClick={() => setExpanded(prev => !prev)}
       >
-        <div className="w-10 h-10 rounded-full bg-[#161B22] border border-[#30363D] flex items-center justify-center shrink-0">
-          <span className="text-base font-black text-gray-200">{medalLabel(position)}</span>
+        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#161B22] border border-[#30363D] flex items-center justify-center shrink-0">
+          <span className="text-base sm:text-lg font-black text-gray-200">{medalLabel(position)}</span>
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-black text-white uppercase tracking-wide truncate">{unidade.nome}</p>
-          <div className="flex items-center gap-3 mt-0.5">
+          <p className="text-sm sm:text-base font-black text-white uppercase tracking-wide truncate">{unidade.nome}</p>
+          <div className="flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
             <span className="text-[11px] text-green-400 font-bold">{validatedCount} ok</span>
             {invalidatedCount > 0 && (
               <span className="text-[11px] text-red-400 font-bold">{invalidatedCount} pendente{invalidatedCount > 1 ? 's' : ''}</span>
@@ -123,7 +123,7 @@ const UnitCard: React.FC<UnitCardProps> = ({ position, unidade, requirements, pr
         </div>
 
         <div className="text-right shrink-0">
-          <p className="text-xl font-black text-white">{total.toLocaleString('pt-BR')}</p>
+          <p className="text-lg sm:text-xl font-black text-white">{total.toLocaleString('pt-BR')}</p>
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">pontos</p>
         </div>
 
@@ -277,53 +277,67 @@ export const PublicVar: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-[#0B0F1A]/95 backdrop-blur border-b border-[#1F2937]">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-4">
+      {/* Hero header — mascote centralizado, título abaixo */}
+      <header className="bg-[#0B0F1A] border-b border-[#1F2937] pt-8 pb-6 px-4">
+        <div className="max-w-2xl mx-auto flex flex-col items-center gap-3 text-center">
+          {/* Badge confidencial */}
+          <div className="bg-[#FFD60A]/10 border border-[#FFD60A]/40 rounded-full px-4 py-1 mb-1">
+            <p className="text-[10px] text-[#FFD60A] font-black uppercase tracking-widest">Confidencial · Acesso Restrito</p>
+          </div>
+
+          {/* Mascote */}
           <img
             src="/var-mascote.png"
             alt="VAR"
-            className="h-12 w-auto object-contain drop-shadow-lg"
+            className="h-28 sm:h-36 w-auto object-contain drop-shadow-2xl"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base font-black text-white uppercase tracking-wide leading-tight">
-              VAR — Revisão de Resultados
+
+          {/* Título */}
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wider leading-tight">
+              VAR
             </h1>
-            {currentQuarter && (
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                {currentQuarter.name} · {currentQuarter.year} ·{' '}
-                <span className={`font-bold ${currentQuarter.status === 'ACTIVE' ? 'text-green-400' : 'text-amber-400'}`}>
-                  {currentQuarter.status === 'ACTIVE' ? 'Em andamento' : 'Encerrado'}
-                </span>
-              </p>
-            )}
+            <p className="text-sm sm:text-base font-bold text-gray-300 tracking-wide mt-0.5">
+              Revisão de Resultados
+            </p>
           </div>
-          <div className="shrink-0 bg-[#FFD60A]/10 border border-[#FFD60A]/30 rounded-xl px-3 py-1.5 text-center">
-            <p className="text-[10px] text-[#FFD60A] font-black uppercase tracking-wide">Confidencial</p>
-          </div>
+
+          {/* Trimestre */}
+          {currentQuarter && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-gray-400 font-semibold">
+                {currentQuarter.name} · {currentQuarter.year}
+              </span>
+              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                currentQuarter.status === 'ACTIVE'
+                  ? 'bg-green-500/15 text-green-400'
+                  : 'bg-amber-500/15 text-amber-400'
+              }`}>
+                {currentQuarter.status === 'ACTIVE' ? 'Em andamento' : 'Encerrado'}
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-3">
+      <main className="max-w-2xl mx-auto px-4 py-6 flex flex-col gap-3">
         {/* Summary bar */}
-        <div className="rounded-2xl border border-[#1F2937] bg-[#111827] px-5 py-3 flex items-center justify-between gap-4">
-          <div className="text-center">
-            <p className="text-xl font-black text-white">{ranking.length}</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide">Unidades</p>
+        <div className="rounded-2xl border border-[#1F2937] bg-[#111827] px-4 py-4 grid grid-cols-3 divide-x divide-[#1F2937]">
+          <div className="text-center px-2">
+            <p className="text-2xl sm:text-3xl font-black text-white">{ranking.length}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide mt-0.5">Unidades</p>
           </div>
-          <div className="w-px h-8 bg-[#1F2937]" />
-          <div className="text-center">
-            <p className="text-xl font-black text-white">{requirements.length}</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide">Requisitos</p>
+          <div className="text-center px-2">
+            <p className="text-2xl sm:text-3xl font-black text-white">{requirements.length}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide mt-0.5">Requisitos</p>
           </div>
-          <div className="w-px h-8 bg-[#1F2937]" />
-          <div className="text-center">
-            <p className="text-xl font-black text-white">
+          <div className="text-center px-2">
+            <p className="text-2xl sm:text-3xl font-black text-white">
               {ranking[0]?.total.toLocaleString('pt-BR') ?? '—'}
             </p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide">Líder (pts)</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide mt-0.5">Líder (pts)</p>
           </div>
         </div>
 

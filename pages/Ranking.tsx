@@ -220,6 +220,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     try {
       const config = await fs.ensureVarToken(clubId);
       applyVarConfig(config);
+      // Atualiza contador após 3s para capturar acessos recentes
+      window.setTimeout(() => loadVarAccessCount(), 3000);
       const origin = window.location.origin + window.location.pathname;
       const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
       await navigator.clipboard.writeText(url);
@@ -434,12 +436,12 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
               </button>
               {varConfig !== null && (
                 <button
-                  onClick={() => setShowVarLog(prev => !prev)}
+                  onClick={async () => { await loadVarAccessCount(); setShowVarLog(prev => !prev); }}
                   className="flex flex-col gap-0.5 text-left hover:opacity-80 transition-opacity"
-                  title="Ver log de acessos"
+                  title="Atualizar e ver log de acessos"
                 >
                   <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap underline decoration-dotted">
-                    {varConfig.accessCount} {varConfig.accessCount === 1 ? 'acesso' : 'acessos'}
+                    {varConfig.accessCount} {varConfig.accessCount === 1 ? 'acesso' : 'acessos'} ↻
                   </span>
                   <div className="flex items-center gap-1.5">
                     {(varConfig.mobile ?? 0) > 0 && (

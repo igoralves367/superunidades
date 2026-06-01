@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '../firebase';
 import { VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
@@ -244,10 +246,15 @@ export const PublicVar: React.FC = () => {
           setTokenValid(true);
         }
 
-        // Register access once
+        // Register access once — sign in anonymously so Firestore rules allow the write
         if (!accessRegistered.current) {
           accessRegistered.current = true;
-          fs.registerVarAccess(resolvedId, parseDeviceInfo()).catch(() => {});
+          const ensureAuth = auth.currentUser
+            ? Promise.resolve()
+            : signInAnonymously(auth).then(() => {});
+          ensureAuth
+            .then(() => fs.registerVarAccess(resolvedId, parseDeviceInfo()))
+            .catch(() => {});
         }
 
         const [fetchedUnits, fetchedQuarters] = await Promise.all([

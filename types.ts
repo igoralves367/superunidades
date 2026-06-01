@@ -507,7 +507,7 @@ export interface VarAccessLogEntry {
   deviceType: 'mobile' | 'desktop' | 'tablet';
   deviceModel: string;
   os: string;
-  accessedAt: any;
+  accessedAt: string; // ISO 8601
 }
 
 export interface VarConfig {

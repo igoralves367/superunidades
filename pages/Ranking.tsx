@@ -486,8 +486,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                   <p className="text-[10px] text-gray-500">{entry.os}</p>
                 </div>
                 <span className="text-[10px] text-gray-600 shrink-0">
-                  {entry.accessedAt?.toDate
-                    ? entry.accessedAt.toDate().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  {entry.accessedAt
+                    ? new Date(entry.accessedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
                     : '—'
                   }
                 </span>

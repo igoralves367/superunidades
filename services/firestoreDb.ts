@@ -1903,13 +1903,12 @@ export const registerVarAccess = async (
   entry: Omit<VarAccessLogEntry, 'accessedAt'>
 ): Promise<void> => {
   validateClub(clubId);
-  const logEntry: VarAccessLogEntry = { ...entry, accessedAt: serverTimestamp() };
-  const update: Record<string, FieldValue> = {
+  // serverTimestamp() não pode ser usado dentro de arrayUnion — usar ISO string
+  const logEntry: VarAccessLogEntry = { ...entry, accessedAt: new Date().toISOString() };
+  await setDoc(VAR_STATS_DOC(clubId), {
     accessCount: increment(1),
     lastAccessAt: serverTimestamp(),
     [`accessByDevice.${entry.deviceType}`]: increment(1),
     accessLog: arrayUnion(logEntry)
-  };
-  // setDoc com merge garante que o doc existe mesmo se nunca foi criado
-  await setDoc(VAR_STATS_DOC(clubId), update, { merge: true });
+  }, { merge: true });
 };

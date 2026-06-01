@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
-import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
+import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc, VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
   buildRankingProgressState,
@@ -84,7 +84,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
   const [copiedVar, setCopiedVar] = useState(false);
-  const [varConfig, setVarConfig] = useState<{ accessCount: number; mobile?: number; desktop?: number; tablet?: number } | null>(null);
+  const [varConfig, setVarConfig] = useState<{ accessCount: number; mobile?: number; desktop?: number; tablet?: number; log?: VarAccessLogEntry[] } | null>(null);
+  const [showVarLog, setShowVarLog] = useState(false);
   const [regeneratingVar, setRegeneratingVar] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
@@ -210,7 +211,8 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       accessCount: config.accessCount,
       mobile: config.accessByDevice?.mobile,
       desktop: config.accessByDevice?.desktop,
-      tablet: config.accessByDevice?.tablet
+      tablet: config.accessByDevice?.tablet,
+      log: config.accessLog ? [...config.accessLog].reverse() : []
     });
   };
 
@@ -431,8 +433,12 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                 <Copy size={14} /> {copiedVar ? 'Link VAR copiado!' : 'Link VAR'}
               </button>
               {varConfig !== null && (
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">
+                <button
+                  onClick={() => setShowVarLog(prev => !prev)}
+                  className="flex flex-col gap-0.5 text-left hover:opacity-80 transition-opacity"
+                  title="Ver log de acessos"
+                >
+                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap underline decoration-dotted">
                     {varConfig.accessCount} {varConfig.accessCount === 1 ? 'acesso' : 'acessos'}
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -446,7 +452,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                       <span className="text-[9px] text-gray-600 whitespace-nowrap">📟 {varConfig.tablet}</span>
                     )}
                   </div>
-                </div>
+                </button>
               )}
               <button
                 onClick={handleRegenerateVarToken}
@@ -460,6 +466,34 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           )}
         </div>
       </header>
+
+      {showVarLog && varConfig?.log && varConfig.log.length > 0 && (
+        <div className="rounded-2xl border border-[#FFD60A]/20 bg-[#111827] px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-black text-[#FFD60A] uppercase tracking-wider">Log de Acessos VAR</p>
+            <button onClick={() => setShowVarLog(false)} className="text-gray-600 hover:text-gray-400 text-xs">✕ fechar</button>
+          </div>
+          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+            {varConfig.log.map((entry, idx) => (
+              <div key={idx} className="flex items-center gap-3 py-1.5 border-b border-[#1F2937] last:border-0">
+                <span className="text-base shrink-0">
+                  {entry.deviceType === 'mobile' ? '📱' : entry.deviceType === 'tablet' ? '📟' : '💻'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-200 truncate">{entry.deviceModel}</p>
+                  <p className="text-[10px] text-gray-500">{entry.os}</p>
+                </div>
+                <span className="text-[10px] text-gray-600 shrink-0">
+                  {entry.accessedAt?.toDate
+                    ? entry.accessedAt.toDate().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : '—'
+                  }
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {publicMode === 'RESTRICTED' && (
         <div className="rounded-2xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 px-5 py-3 flex items-center gap-3">

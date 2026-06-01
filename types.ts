@@ -502,10 +502,18 @@ export interface VarAccessByDevice {
   tablet: number;
 }
 
+export interface VarAccessLogEntry {
+  deviceType: 'mobile' | 'desktop' | 'tablet';
+  deviceModel: string;
+  os: string;
+  accessedAt: any;
+}
+
 export interface VarConfig {
   token: string;
   accessCount: number;
   accessByDevice?: VarAccessByDevice;
+  accessLog?: VarAccessLogEntry[];
   lastAccessAt?: any;
   createdAt?: any;
   updatedAt?: any;

@@ -1,18 +1,58 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
-import { VarAccessByDevice } from '../types';
+import { VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
 import { buildRankingRows } from '../services/ranking';
 
 // ---------------------------------------------------------------------------
-// Device detection
+// Device detection + UA parsing
 // ---------------------------------------------------------------------------
-const detectDevice = (): keyof VarAccessByDevice => {
+const parseDeviceInfo = (): Omit<VarAccessLogEntry, 'accessedAt'> => {
   const ua = navigator.userAgent;
-  if (/tablet|ipad|playbook|silk/i.test(ua)) return 'tablet';
-  if (/mobi|android|iphone|ipod|blackberry|opera mini|iemobile/i.test(ua)) return 'mobile';
-  return 'desktop';
+
+  // Device type
+  const isTablet = /tablet|ipad|playbook|silk/i.test(ua);
+  const isMobile = !isTablet && /mobi|android|iphone|ipod|blackberry|opera mini|iemobile/i.test(ua);
+  const deviceType: VarAccessLogEntry['deviceType'] = isTablet ? 'tablet' : isMobile ? 'mobile' : 'desktop';
+
+  // OS
+  let os = 'Desconhecido';
+  if (/windows nt 10/i.test(ua)) os = 'Windows 10/11';
+  else if (/windows nt/i.test(ua)) os = 'Windows';
+  else if (/mac os x/i.test(ua) && !/iphone|ipad/i.test(ua)) os = 'macOS';
+  else if (/android (\d+[\.\d]*)/i.test(ua)) os = `Android ${ua.match(/android (\d+[\.\d]*)/i)?.[1] ?? ''}`.trim();
+  else if (/iphone os ([\d_]+)/i.test(ua)) os = `iOS ${(ua.match(/iphone os ([\d_]+)/i)?.[1] ?? '').replace(/_/g, '.')}`;
+  else if (/ipad.*os ([\d_]+)/i.test(ua)) os = `iPadOS ${(ua.match(/os ([\d_]+)/i)?.[1] ?? '').replace(/_/g, '.')}`;
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  // Device model
+  let deviceModel = 'Desconhecido';
+  if (/iphone/i.test(ua)) {
+    deviceModel = 'iPhone';
+  } else if (/ipad/i.test(ua)) {
+    deviceModel = 'iPad';
+  } else if (/android/i.test(ua)) {
+    // Android UA: "(...; Device Model Build/...)" — extract model between "; " and " Build" or ")"
+    const modelMatch = ua.match(/;\s*([^;)]+?)\s+(?:Build\/|MIUI\/|\))/i);
+    if (modelMatch) {
+      const raw = modelMatch[1].trim();
+      // Filter out OS info that sometimes appears here
+      if (!/android|linux|mobile/i.test(raw)) {
+        deviceModel = raw;
+      }
+    }
+    if (deviceModel === 'Desconhecido') {
+      const fallback = ua.match(/android[^;]*;\s*([^)]+)\)/i);
+      deviceModel = fallback?.[1]?.trim() ?? 'Android';
+    }
+  } else if (/windows/i.test(ua)) {
+    deviceModel = 'PC Windows';
+  } else if (/macintosh/i.test(ua)) {
+    deviceModel = 'Mac';
+  }
+
+  return { deviceType, deviceModel, os };
 };
 
 // ---------------------------------------------------------------------------
@@ -207,7 +247,7 @@ export const PublicVar: React.FC = () => {
         // Register access once
         if (!accessRegistered.current) {
           accessRegistered.current = true;
-          fs.registerVarAccess(resolvedId, detectDevice()).catch(() => {});
+          fs.registerVarAccess(resolvedId, parseDeviceInfo()).catch(() => {});
         }
 
         const [fetchedUnits, fetchedQuarters] = await Promise.all([

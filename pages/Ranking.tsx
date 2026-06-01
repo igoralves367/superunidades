@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
-import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
+import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc, VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
   buildRankingProgressState,
@@ -83,6 +83,10 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
+  const [copiedVar, setCopiedVar] = useState(false);
+  const [varConfig, setVarConfig] = useState<{ accessCount: number; mobile?: number; desktop?: number; tablet?: number; log?: VarAccessLogEntry[] } | null>(null);
+  const [showVarLog, setShowVarLog] = useState(false);
+  const [regeneratingVar, setRegeneratingVar] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
   const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
@@ -125,6 +129,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
 
   useEffect(() => {
     loadBase();
+    if (user.perfil === 'DIRETORIA') loadVarAccessCount();
   }, [clubId]);
 
   useEffect(() => {
@@ -198,6 +203,60 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       console.error(error);
       alert('Não foi possível copiar o link público.');
     }
+  };
+
+  const applyVarConfig = (config: Awaited<ReturnType<typeof fs.getVarConfig>>) => {
+    if (!config) return;
+    setVarConfig({
+      accessCount: config.accessCount,
+      mobile: config.accessByDevice?.mobile,
+      desktop: config.accessByDevice?.desktop,
+      tablet: config.accessByDevice?.tablet,
+      log: config.accessLog ? [...config.accessLog].reverse() : []
+    });
+  };
+
+  const handleCopyVarLink = async () => {
+    try {
+      const config = await fs.ensureVarToken(clubId);
+      applyVarConfig(config);
+      // Atualiza contador após 3s para capturar acessos recentes
+      window.setTimeout(() => loadVarAccessCount(), 3000);
+      const origin = window.location.origin + window.location.pathname;
+      const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedVar(true);
+      window.setTimeout(() => setCopiedVar(false), 2500);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível copiar o link VAR.');
+    }
+  };
+
+  const handleRegenerateVarToken = async () => {
+    if (!window.confirm('Gerar novo token VAR? O link anterior deixará de funcionar.')) return;
+    setRegeneratingVar(true);
+    try {
+      const config = await fs.regenerateVarToken(clubId);
+      applyVarConfig(config);
+      const origin = window.location.origin + window.location.pathname;
+      const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedVar(true);
+      window.setTimeout(() => setCopiedVar(false), 2500);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao regenerar token VAR.');
+    } finally {
+      setRegeneratingVar(false);
+    }
+  };
+
+  const loadVarAccessCount = async () => {
+    try {
+      const config = await fs.getVarConfig(clubId);
+      applyVarConfig(config);
+    } catch { /* silencioso */ }
   };
 
   const handleCopyUnitLink = async (unitId: string) => {
@@ -365,8 +424,78 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           >
             <ArrowUpRight size={14} /> Abrir ranking público
           </a>
+
+          {user.perfil === 'DIRETORIA' && (
+            <div className="flex items-center gap-2 pl-2 border-l border-[#1F2937]">
+              <button
+                onClick={handleCopyVarLink}
+                title="Copiar link VAR confidencial com token de acesso"
+                className="px-4 py-2 rounded-xl bg-[#FFD60A]/10 border border-[#FFD60A]/40 text-[#FFD60A] text-xs font-black uppercase flex items-center gap-2 hover:bg-[#FFD60A]/20 transition-colors"
+              >
+                <Copy size={14} /> {copiedVar ? 'Link VAR copiado!' : 'Link VAR'}
+              </button>
+              {varConfig !== null && (
+                <button
+                  onClick={async () => { await loadVarAccessCount(); setShowVarLog(prev => !prev); }}
+                  className="flex flex-col gap-0.5 text-left hover:opacity-80 transition-opacity"
+                  title="Atualizar e ver log de acessos"
+                >
+                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap underline decoration-dotted">
+                    {varConfig.accessCount} {varConfig.accessCount === 1 ? 'acesso' : 'acessos'} ↻
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {(varConfig.mobile ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">📱 {varConfig.mobile}</span>
+                    )}
+                    {(varConfig.desktop ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">💻 {varConfig.desktop}</span>
+                    )}
+                    {(varConfig.tablet ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">📟 {varConfig.tablet}</span>
+                    )}
+                  </div>
+                </button>
+              )}
+              <button
+                onClick={handleRegenerateVarToken}
+                disabled={regeneratingVar}
+                title="Gerar novo token — invalida o link anterior"
+                className="px-3 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-[10px] font-black uppercase text-gray-500 flex items-center gap-1 hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-50"
+              >
+                {regeneratingVar ? <Loader2 size={12} className="animate-spin" /> : '↺'} Novo token
+              </button>
+            </div>
+          )}
         </div>
       </header>
+
+      {showVarLog && varConfig?.log && varConfig.log.length > 0 && (
+        <div className="rounded-2xl border border-[#FFD60A]/20 bg-[#111827] px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-black text-[#FFD60A] uppercase tracking-wider">Log de Acessos VAR</p>
+            <button onClick={() => setShowVarLog(false)} className="text-gray-600 hover:text-gray-400 text-xs">✕ fechar</button>
+          </div>
+          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
+            {varConfig.log.map((entry, idx) => (
+              <div key={idx} className="flex items-center gap-3 py-1.5 border-b border-[#1F2937] last:border-0">
+                <span className="text-base shrink-0">
+                  {entry.deviceType === 'mobile' ? '📱' : entry.deviceType === 'tablet' ? '📟' : '💻'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-200 truncate">{entry.deviceModel}</p>
+                  <p className="text-[10px] text-gray-500">{entry.os}</p>
+                </div>
+                <span className="text-[10px] text-gray-600 shrink-0">
+                  {entry.accessedAt
+                    ? new Date(entry.accessedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : '—'
+                  }
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {publicMode === 'RESTRICTED' && (
         <div className="rounded-2xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 px-5 py-3 flex items-center gap-3">

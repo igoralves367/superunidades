@@ -1,17 +1,20 @@
 
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
   serverTimestamp,
   getDoc,
   writeBatch,
   where,
-  deleteField
+  deleteField,
+  increment,
+  FieldValue,
+  arrayUnion
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -44,7 +47,10 @@ import {
   Reuniao,
   ReuniaoPresenca,
   FanfarraInstrumento,
-  PagamentoSocio
+  PagamentoSocio,
+  VarConfig,
+  VarAccessByDevice,
+  VarAccessLogEntry
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -1841,4 +1847,68 @@ export const updateFanfarraInstrumento = async (
     ...updatePayload,
     updatedAt: serverTimestamp()
   }));
+};
+
+// --- VAR (revisão de resultados) ---
+// O token fica no documento do clube (clubs/{clubId}) para ser legível sem autenticação.
+// Contadores e log ficam em clubs/{clubId}/config/var (escrita autenticada).
+
+const VAR_STATS_DOC = (clubId: string) => doc(db, 'clubs', clubId, 'config', 'var');
+
+const generateVarToken = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
+export const getVarConfig = async (clubId: string): Promise<VarConfig | null> => {
+  validateClub(clubId);
+  const [clubSnap, statsSnap] = await Promise.all([
+    getDoc(doc(db, 'clubs', clubId)),
+    getDoc(VAR_STATS_DOC(clubId))
+  ]);
+  const token = (clubSnap.data() as Clube | undefined)?.varToken;
+  if (!token) return null;
+  const stats = statsSnap.exists() ? (statsSnap.data() as Partial<VarConfig>) : {};
+  return { token, accessCount: stats.accessCount ?? 0, accessByDevice: stats.accessByDevice, accessLog: stats.accessLog };
+};
+
+export const ensureVarToken = async (clubId: string): Promise<VarConfig> => {
+  validateClub(clubId);
+  const club = await getClub(clubId);
+  if (club?.varToken) {
+    const stats = await getDoc(VAR_STATS_DOC(clubId));
+    const s = stats.exists() ? (stats.data() as Partial<VarConfig>) : {};
+    return { token: club.varToken, accessCount: s.accessCount ?? 0, accessByDevice: s.accessByDevice, accessLog: s.accessLog };
+  }
+  const token = generateVarToken();
+  await Promise.all([
+    updateDoc(doc(db, 'clubs', clubId), { varToken: token, updatedAt: serverTimestamp() }),
+    setDoc(VAR_STATS_DOC(clubId), { accessCount: 0, createdAt: serverTimestamp() }, { merge: true })
+  ]);
+  return { token, accessCount: 0 };
+};
+
+export const regenerateVarToken = async (clubId: string): Promise<VarConfig> => {
+  validateClub(clubId);
+  const token = generateVarToken();
+  await Promise.all([
+    updateDoc(doc(db, 'clubs', clubId), { varToken: token, updatedAt: serverTimestamp() }),
+    setDoc(VAR_STATS_DOC(clubId), { accessCount: 0, updatedAt: serverTimestamp() }, { merge: true })
+  ]);
+  return { token, accessCount: 0 };
+};
+
+export const registerVarAccess = async (
+  clubId: string,
+  entry: Omit<VarAccessLogEntry, 'accessedAt'>
+): Promise<void> => {
+  validateClub(clubId);
+  // serverTimestamp() não pode ser usado dentro de arrayUnion — usar ISO string
+  const logEntry: VarAccessLogEntry = { ...entry, accessedAt: new Date().toISOString() };
+  await setDoc(VAR_STATS_DOC(clubId), {
+    accessCount: increment(1),
+    lastAccessAt: serverTimestamp(),
+    [`accessByDevice.${entry.deviceType}`]: increment(1),
+    accessLog: arrayUnion(logEntry)
+  }, { merge: true });
 };

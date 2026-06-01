@@ -46,6 +46,7 @@ export interface Clube {
   id: string;
   nome: string;
   publicSlug?: string;
+  varToken?: string;
 }
 
 export interface MemberInstructorSpecialty {
@@ -491,6 +492,30 @@ export interface FanfarraInstrumento {
   status: FanfarraStatusInstrumento;
   desbravadorId: string;
   ativo: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+// --- VAR (revisão de resultados) ---
+export interface VarAccessByDevice {
+  mobile: number;
+  desktop: number;
+  tablet: number;
+}
+
+export interface VarAccessLogEntry {
+  deviceType: 'mobile' | 'desktop' | 'tablet';
+  deviceModel: string;
+  os: string;
+  accessedAt: string; // ISO 8601
+}
+
+export interface VarConfig {
+  token: string;
+  accessCount: number;
+  accessByDevice?: VarAccessByDevice;
+  accessLog?: VarAccessLogEntry[];
+  lastAccessAt?: any;
   createdAt?: any;
   updatedAt?: any;
 }

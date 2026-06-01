@@ -46,6 +46,7 @@ export interface Clube {
   id: string;
   nome: string;
   publicSlug?: string;
+  varToken?: string;
 }
 
 export interface MemberInstructorSpecialty {

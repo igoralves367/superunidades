@@ -1850,8 +1850,10 @@ export const updateFanfarraInstrumento = async (
 };
 
 // --- VAR (revisão de resultados) ---
+// O token fica no documento do clube (clubs/{clubId}) para ser legível sem autenticação.
+// Contadores e log ficam em clubs/{clubId}/config/var (escrita autenticada).
 
-const VAR_DOC_PATH = (clubId: string) => doc(db, 'clubs', clubId, 'config', 'var');
+const VAR_STATS_DOC = (clubId: string) => doc(db, 'clubs', clubId, 'config', 'var');
 
 const generateVarToken = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1860,35 +1862,40 @@ const generateVarToken = () => {
 
 export const getVarConfig = async (clubId: string): Promise<VarConfig | null> => {
   validateClub(clubId);
-  const snap = await getDoc(VAR_DOC_PATH(clubId));
-  if (!snap.exists()) return null;
-  return snap.data() as VarConfig;
+  const [clubSnap, statsSnap] = await Promise.all([
+    getDoc(doc(db, 'clubs', clubId)),
+    getDoc(VAR_STATS_DOC(clubId))
+  ]);
+  const token = (clubSnap.data() as Clube | undefined)?.varToken;
+  if (!token) return null;
+  const stats = statsSnap.exists() ? (statsSnap.data() as Partial<VarConfig>) : {};
+  return { token, accessCount: stats.accessCount ?? 0, accessByDevice: stats.accessByDevice, accessLog: stats.accessLog };
 };
 
 export const ensureVarToken = async (clubId: string): Promise<VarConfig> => {
   validateClub(clubId);
-  const existing = await getVarConfig(clubId);
-  if (existing?.token) return existing;
-  const config: VarConfig = {
-    token: generateVarToken(),
-    accessCount: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-  await setDoc(VAR_DOC_PATH(clubId), config);
-  return { ...config, accessCount: 0 };
+  const club = await getClub(clubId);
+  if (club?.varToken) {
+    const stats = await getDoc(VAR_STATS_DOC(clubId));
+    const s = stats.exists() ? (stats.data() as Partial<VarConfig>) : {};
+    return { token: club.varToken, accessCount: s.accessCount ?? 0, accessByDevice: s.accessByDevice, accessLog: s.accessLog };
+  }
+  const token = generateVarToken();
+  await Promise.all([
+    updateDoc(doc(db, 'clubs', clubId), { varToken: token, updatedAt: serverTimestamp() }),
+    setDoc(VAR_STATS_DOC(clubId), { accessCount: 0, createdAt: serverTimestamp() }, { merge: true })
+  ]);
+  return { token, accessCount: 0 };
 };
 
 export const regenerateVarToken = async (clubId: string): Promise<VarConfig> => {
   validateClub(clubId);
-  const config: Partial<VarConfig> = {
-    token: generateVarToken(),
-    accessCount: 0,
-    updatedAt: serverTimestamp()
-  };
-  await setDoc(VAR_DOC_PATH(clubId), config, { merge: true });
-  const updated = await getVarConfig(clubId);
-  return updated!;
+  const token = generateVarToken();
+  await Promise.all([
+    updateDoc(doc(db, 'clubs', clubId), { varToken: token, updatedAt: serverTimestamp() }),
+    setDoc(VAR_STATS_DOC(clubId), { accessCount: 0, updatedAt: serverTimestamp() }, { merge: true })
+  ]);
+  return { token, accessCount: 0 };
 };
 
 export const registerVarAccess = async (
@@ -1903,5 +1910,6 @@ export const registerVarAccess = async (
     [`accessByDevice.${entry.deviceType}`]: increment(1),
     accessLog: arrayUnion(logEntry)
   };
-  await updateDoc(VAR_DOC_PATH(clubId), update);
+  // setDoc com merge garante que o doc existe mesmo se nunca foi criado
+  await setDoc(VAR_STATS_DOC(clubId), update, { merge: true });
 };

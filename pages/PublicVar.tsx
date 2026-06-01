@@ -232,9 +232,9 @@ export const PublicVar: React.FC = () => {
 
         if (!resolvedId || cancelled) { setLoading(false); return; }
 
-        // Validate token
-        const varConfig = await fs.getVarConfig(resolvedId);
-        if (!varConfig?.token || varConfig.token !== token) {
+        // Validate token — lê o clube (doc público), sem necessidade de auth
+        const club = await fs.getClub(resolvedId);
+        if (!club?.varToken || club.varToken !== token) {
           if (!cancelled) setLoading(false);
           return;
         }

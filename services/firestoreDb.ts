@@ -1,17 +1,18 @@
 
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
   serverTimestamp,
   getDoc,
   writeBatch,
   where,
-  deleteField
+  deleteField,
+  increment
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -44,7 +45,8 @@ import {
   Reuniao,
   ReuniaoPresenca,
   FanfarraInstrumento,
-  PagamentoSocio
+  PagamentoSocio,
+  VarConfig
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -1841,4 +1843,54 @@ export const updateFanfarraInstrumento = async (
     ...updatePayload,
     updatedAt: serverTimestamp()
   }));
+};
+
+// --- VAR (revisão de resultados) ---
+
+const VAR_DOC_PATH = (clubId: string) => doc(db, 'clubs', clubId, 'config', 'var');
+
+const generateVarToken = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
+export const getVarConfig = async (clubId: string): Promise<VarConfig | null> => {
+  validateClub(clubId);
+  const snap = await getDoc(VAR_DOC_PATH(clubId));
+  if (!snap.exists()) return null;
+  return snap.data() as VarConfig;
+};
+
+export const ensureVarToken = async (clubId: string): Promise<VarConfig> => {
+  validateClub(clubId);
+  const existing = await getVarConfig(clubId);
+  if (existing?.token) return existing;
+  const config: VarConfig = {
+    token: generateVarToken(),
+    accessCount: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  await setDoc(VAR_DOC_PATH(clubId), config);
+  return { ...config, accessCount: 0 };
+};
+
+export const regenerateVarToken = async (clubId: string): Promise<VarConfig> => {
+  validateClub(clubId);
+  const config: Partial<VarConfig> = {
+    token: generateVarToken(),
+    accessCount: 0,
+    updatedAt: serverTimestamp()
+  };
+  await setDoc(VAR_DOC_PATH(clubId), config, { merge: true });
+  const updated = await getVarConfig(clubId);
+  return updated!;
+};
+
+export const registerVarAccess = async (clubId: string): Promise<void> => {
+  validateClub(clubId);
+  await updateDoc(VAR_DOC_PATH(clubId), {
+    accessCount: increment(1),
+    lastAccessAt: serverTimestamp()
+  });
 };

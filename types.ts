@@ -494,3 +494,12 @@ export interface FanfarraInstrumento {
   createdAt?: any;
   updatedAt?: any;
 }
+
+// --- VAR (revisão de resultados) ---
+export interface VarConfig {
+  token: string;
+  accessCount: number;
+  lastAccessAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+}

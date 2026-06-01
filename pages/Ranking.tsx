@@ -83,6 +83,9 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [selectedUnitId, setSelectedUnitId] = useState('');
   const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
+  const [copiedVar, setCopiedVar] = useState(false);
+  const [varAccessCount, setVarAccessCount] = useState<number | null>(null);
+  const [regeneratingVar, setRegeneratingVar] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
   const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
@@ -125,6 +128,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
 
   useEffect(() => {
     loadBase();
+    if (user.perfil === 'DIRETORIA') loadVarAccessCount();
   }, [clubId]);
 
   useEffect(() => {
@@ -198,6 +202,47 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       console.error(error);
       alert('Não foi possível copiar o link público.');
     }
+  };
+
+  const handleCopyVarLink = async () => {
+    try {
+      const config = await fs.ensureVarToken(clubId);
+      setVarAccessCount(config.accessCount);
+      const origin = window.location.origin + window.location.pathname;
+      const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedVar(true);
+      window.setTimeout(() => setCopiedVar(false), 2500);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível copiar o link VAR.');
+    }
+  };
+
+  const handleRegenerateVarToken = async () => {
+    if (!window.confirm('Gerar novo token VAR? O link anterior deixará de funcionar.')) return;
+    setRegeneratingVar(true);
+    try {
+      const config = await fs.regenerateVarToken(clubId);
+      setVarAccessCount(config.accessCount);
+      const origin = window.location.origin + window.location.pathname;
+      const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedVar(true);
+      window.setTimeout(() => setCopiedVar(false), 2500);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao regenerar token VAR.');
+    } finally {
+      setRegeneratingVar(false);
+    }
+  };
+
+  const loadVarAccessCount = async () => {
+    try {
+      const config = await fs.getVarConfig(clubId);
+      setVarAccessCount(config?.accessCount ?? 0);
+    } catch { /* silencioso */ }
   };
 
   const handleCopyUnitLink = async (unitId: string) => {
@@ -365,6 +410,31 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           >
             <ArrowUpRight size={14} /> Abrir ranking público
           </a>
+
+          {user.perfil === 'DIRETORIA' && (
+            <div className="flex items-center gap-2 pl-2 border-l border-[#1F2937]">
+              <button
+                onClick={handleCopyVarLink}
+                title="Copiar link VAR confidencial com token de acesso"
+                className="px-4 py-2 rounded-xl bg-[#FFD60A]/10 border border-[#FFD60A]/40 text-[#FFD60A] text-xs font-black uppercase flex items-center gap-2 hover:bg-[#FFD60A]/20 transition-colors"
+              >
+                <Copy size={14} /> {copiedVar ? 'Link VAR copiado!' : 'Link VAR'}
+              </button>
+              {varAccessCount !== null && (
+                <span className="text-[10px] text-gray-500 font-bold whitespace-nowrap">
+                  {varAccessCount} {varAccessCount === 1 ? 'acesso' : 'acessos'}
+                </span>
+              )}
+              <button
+                onClick={handleRegenerateVarToken}
+                disabled={regeneratingVar}
+                title="Gerar novo token — invalida o link anterior"
+                className="px-3 py-2 rounded-xl bg-[#111827] border border-[#1F2937] text-[10px] font-black uppercase text-gray-500 flex items-center gap-1 hover:text-red-400 hover:border-red-500/30 transition-colors disabled:opacity-50"
+              >
+                {regeneratingVar ? <Loader2 size={12} className="animate-spin" /> : '↺'} Novo token
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

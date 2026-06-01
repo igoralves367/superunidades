@@ -1,8 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { VarAccessByDevice } from '../types';
 import * as fs from '../services/firestoreDb';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
 import { buildRankingRows } from '../services/ranking';
+
+// ---------------------------------------------------------------------------
+// Device detection
+// ---------------------------------------------------------------------------
+const detectDevice = (): keyof VarAccessByDevice => {
+  const ua = navigator.userAgent;
+  if (/tablet|ipad|playbook|silk/i.test(ua)) return 'tablet';
+  if (/mobi|android|iphone|ipod|blackberry|opera mini|iemobile/i.test(ua)) return 'mobile';
+  return 'desktop';
+};
 
 // ---------------------------------------------------------------------------
 // Route parsing — #var/{clubId|slug}?token=XXXX
@@ -196,7 +207,7 @@ export const PublicVar: React.FC = () => {
         // Register access once
         if (!accessRegistered.current) {
           accessRegistered.current = true;
-          fs.registerVarAccess(resolvedId).catch(() => {});
+          fs.registerVarAccess(resolvedId, detectDevice()).catch(() => {});
         }
 
         const [fetchedUnits, fetchedQuarters] = await Promise.all([
@@ -277,31 +288,21 @@ export const PublicVar: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0B0F1A] text-white">
-      {/* Hero header — mascote centralizado, título abaixo */}
+      {/* Hero header — mascote centralizado, subtítulo abaixo */}
       <header className="bg-[#0B0F1A] border-b border-[#1F2937] pt-8 pb-6 px-4">
-        <div className="max-w-2xl mx-auto flex flex-col items-center gap-3 text-center">
-          {/* Badge confidencial */}
-          <div className="bg-[#FFD60A]/10 border border-[#FFD60A]/40 rounded-full px-4 py-1 mb-1">
-            <p className="text-[10px] text-[#FFD60A] font-black uppercase tracking-widest">Confidencial · Acesso Restrito</p>
-          </div>
-
-          {/* Mascote */}
+        <div className="max-w-2xl mx-auto flex flex-col items-center gap-2 text-center">
+          {/* Mascote em destaque */}
           <img
             src="/var-mascote.png"
             alt="VAR"
-            className="h-28 sm:h-36 w-auto object-contain drop-shadow-2xl"
+            className="h-40 sm:h-52 w-auto object-contain drop-shadow-2xl"
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
 
-          {/* Título */}
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-wider leading-tight">
-              VAR
-            </h1>
-            <p className="text-sm sm:text-base font-bold text-gray-300 tracking-wide mt-0.5">
-              Revisão de Resultados
-            </p>
-          </div>
+          {/* Subtítulo */}
+          <p className="text-base sm:text-lg font-bold text-gray-300 tracking-wide">
+            Revisão de Resultados
+          </p>
 
           {/* Trimestre */}
           {currentQuarter && (

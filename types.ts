@@ -496,9 +496,16 @@ export interface FanfarraInstrumento {
 }
 
 // --- VAR (revisão de resultados) ---
+export interface VarAccessByDevice {
+  mobile: number;
+  desktop: number;
+  tablet: number;
+}
+
 export interface VarConfig {
   token: string;
   accessCount: number;
+  accessByDevice?: VarAccessByDevice;
   lastAccessAt?: any;
   createdAt?: any;
   updatedAt?: any;

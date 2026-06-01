@@ -12,7 +12,8 @@ import {
   writeBatch,
   where,
   deleteField,
-  increment
+  increment,
+  FieldValue
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
@@ -46,7 +47,8 @@ import {
   ReuniaoPresenca,
   FanfarraInstrumento,
   PagamentoSocio,
-  VarConfig
+  VarConfig,
+  VarAccessByDevice
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
@@ -1887,10 +1889,15 @@ export const regenerateVarToken = async (clubId: string): Promise<VarConfig> => 
   return updated!;
 };
 
-export const registerVarAccess = async (clubId: string): Promise<void> => {
+export const registerVarAccess = async (
+  clubId: string,
+  device: keyof VarAccessByDevice
+): Promise<void> => {
   validateClub(clubId);
-  await updateDoc(VAR_DOC_PATH(clubId), {
+  const update: Record<string, FieldValue> = {
     accessCount: increment(1),
-    lastAccessAt: serverTimestamp()
-  });
+    lastAccessAt: serverTimestamp(),
+    [`accessByDevice.${device}`]: increment(1)
+  };
+  await updateDoc(VAR_DOC_PATH(clubId), update);
 };

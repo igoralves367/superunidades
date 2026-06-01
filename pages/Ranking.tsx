@@ -84,7 +84,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
   const [copiedVar, setCopiedVar] = useState(false);
-  const [varAccessCount, setVarAccessCount] = useState<number | null>(null);
+  const [varConfig, setVarConfig] = useState<{ accessCount: number; mobile?: number; desktop?: number; tablet?: number } | null>(null);
   const [regeneratingVar, setRegeneratingVar] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
@@ -204,10 +204,20 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     }
   };
 
+  const applyVarConfig = (config: Awaited<ReturnType<typeof fs.getVarConfig>>) => {
+    if (!config) return;
+    setVarConfig({
+      accessCount: config.accessCount,
+      mobile: config.accessByDevice?.mobile,
+      desktop: config.accessByDevice?.desktop,
+      tablet: config.accessByDevice?.tablet
+    });
+  };
+
   const handleCopyVarLink = async () => {
     try {
       const config = await fs.ensureVarToken(clubId);
-      setVarAccessCount(config.accessCount);
+      applyVarConfig(config);
       const origin = window.location.origin + window.location.pathname;
       const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
       await navigator.clipboard.writeText(url);
@@ -224,7 +234,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     setRegeneratingVar(true);
     try {
       const config = await fs.regenerateVarToken(clubId);
-      setVarAccessCount(config.accessCount);
+      applyVarConfig(config);
       const origin = window.location.origin + window.location.pathname;
       const url = `${origin}#var/${encodeURIComponent(publicSlug || clubId)}?token=${config.token}`;
       await navigator.clipboard.writeText(url);
@@ -241,7 +251,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const loadVarAccessCount = async () => {
     try {
       const config = await fs.getVarConfig(clubId);
-      setVarAccessCount(config?.accessCount ?? 0);
+      applyVarConfig(config);
     } catch { /* silencioso */ }
   };
 
@@ -420,10 +430,23 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
               >
                 <Copy size={14} /> {copiedVar ? 'Link VAR copiado!' : 'Link VAR'}
               </button>
-              {varAccessCount !== null && (
-                <span className="text-[10px] text-gray-500 font-bold whitespace-nowrap">
-                  {varAccessCount} {varAccessCount === 1 ? 'acesso' : 'acessos'}
-                </span>
+              {varConfig !== null && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-gray-400 font-bold whitespace-nowrap">
+                    {varConfig.accessCount} {varConfig.accessCount === 1 ? 'acesso' : 'acessos'}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {(varConfig.mobile ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">📱 {varConfig.mobile}</span>
+                    )}
+                    {(varConfig.desktop ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">💻 {varConfig.desktop}</span>
+                    )}
+                    {(varConfig.tablet ?? 0) > 0 && (
+                      <span className="text-[9px] text-gray-600 whitespace-nowrap">📟 {varConfig.tablet}</span>
+                    )}
+                  </div>
+                </div>
               )}
               <button
                 onClick={handleRegenerateVarToken}

@@ -1082,12 +1082,56 @@ export const listRankingProgress = async (clubId: string, quarterId: string): Pr
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as RankingUnitProgressDoc));
 };
 
+export const submitRankingUnitForApproval = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  submittedBy: { id: string; nome: string; email: string }
+) => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const progressRef = doc(db, 'clubs', clubId, 'ranking_progress', docId);
+  await setDoc(progressRef, deepCleanUndefined({
+    approvalStatus: 'SUBMITTED',
+    approvalMeta: {
+      status: 'SUBMITTED',
+      submittedAt: serverTimestamp(),
+      submittedBy
+    },
+    updatedAt: serverTimestamp()
+  }), { merge: true });
+};
+
+export const reviewRankingUnitApproval = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  action: 'APPROVED' | 'REJECTED',
+  reviewedBy: { id: string; nome: string; email: string },
+  rejectionReason?: string
+) => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const progressRef = doc(db, 'clubs', clubId, 'ranking_progress', docId);
+  await setDoc(progressRef, deepCleanUndefined({
+    approvalStatus: action,
+    approvalMeta: {
+      status: action,
+      reviewedAt: serverTimestamp(),
+      reviewedBy,
+      ...(action === 'REJECTED' && rejectionReason ? { rejectionReason } : {})
+    },
+    updatedAt: serverTimestamp()
+  }), { merge: true });
+};
+
 export const saveRankingUnitProgress = async (
   clubId: string,
   quarterId: string,
   unitId: string,
   resultados: Record<string, RankingProgressEntry>,
-  updatedBy?: { id: string; nome: string; email?: string; }
+  updatedBy?: { id: string; nome: string; email?: string; },
+  forceApprove?: boolean
 ) => {
   validateClub(clubId);
   const docId = `${quarterId}__${unitId}`;
@@ -1115,6 +1159,9 @@ export const saveRankingUnitProgress = async (
 
   const totalPoints = Object.values(resultados).reduce((sum, current) => sum + Number(current.calculatedPoints || 0), 0);
 
+  const existingStatus = existingSnap.exists() ? (existingSnap.data().approvalStatus as string | undefined) : undefined;
+  const nextApprovalStatus = forceApprove ? 'APPROVED' : (existingStatus === 'APPROVED' ? 'PENDING' : existingStatus ?? 'PENDING');
+
   await setDoc(progressRef, deepCleanUndefined({
     id: docId,
     quarterId,
@@ -1122,6 +1169,7 @@ export const saveRankingUnitProgress = async (
     clubeId: clubId,
     totalPoints,
     resultados: cleanedResults,
+    approvalStatus: nextApprovalStatus,
     firstSavedAt: existingSnap.exists() ? existingSnap.data().firstSavedAt || existingSnap.data().updatedAt || serverTimestamp() : serverTimestamp(),
     updatedAt: serverTimestamp()
   }), { merge: true });

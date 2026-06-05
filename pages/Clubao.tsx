@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, FileText, Loader2, PlusCircle, Save, Star, Trash2 } from 'lucide-react';
-import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
+import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc, PerfilAcesso, RankingApprovalStatus } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
   buildRankingProgressState,
@@ -10,6 +10,7 @@ import {
   getRequirementRuleLabel
 } from '../services/ranking';
 import { ValidacoesPanel } from '../components/Validacoes/ValidacoesPanel';
+import { ApprovalStatusBar } from '../components/Clubao/ApprovalStatusBar';
 
 type ClubaoTab = 'ranking' | 'validacoes';
 
@@ -207,15 +208,24 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
     });
   };
 
+  const currentApprovalStatus: RankingApprovalStatus = currentDoc?.approvalStatus ?? 'PENDING';
+  const isDiretoria = user.perfil === PerfilAcesso.DIRETORIA;
+  const isFieldReadonly =
+    user.perfil === PerfilAcesso.CONSELHEIRO &&
+    (currentApprovalStatus === 'SUBMITTED' || currentApprovalStatus === 'APPROVED');
+
   const handleSaveUnit = async () => {
     if (!clubId || !selectedQuarterId || !selectedUnitId) return;
+    if (currentApprovalStatus === 'APPROVED' && !isDiretoria) {
+      if (!window.confirm('Esta unidade já foi aprovada. Salvar irá invalidar a aprovação e mover para Pendente. Continuar?')) return;
+    }
     setSaving(true);
     try {
       await fs.saveRankingUnitProgress(clubId, selectedQuarterId, selectedUnitId, state, {
         id: user.id,
         nome: user.nome,
         email: user.email
-      });
+      }, isDiretoria);
       await loadQuarterData(selectedQuarterId);
       alert('Unidade salva com sucesso.');
     } catch (error) {
@@ -224,6 +234,36 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!clubId || !selectedQuarterId || !selectedUnitId) return;
+    await fs.submitRankingUnitForApproval(clubId, selectedQuarterId, selectedUnitId, {
+      id: user.id,
+      nome: user.nome,
+      email: user.email ?? ''
+    });
+    await loadQuarterData(selectedQuarterId);
+  };
+
+  const handleApprove = async () => {
+    if (!clubId || !selectedQuarterId || !selectedUnitId) return;
+    await fs.reviewRankingUnitApproval(clubId, selectedQuarterId, selectedUnitId, 'APPROVED', {
+      id: user.id,
+      nome: user.nome,
+      email: user.email ?? ''
+    });
+    await loadQuarterData(selectedQuarterId);
+  };
+
+  const handleReject = async (reason?: string) => {
+    if (!clubId || !selectedQuarterId || !selectedUnitId) return;
+    await fs.reviewRankingUnitApproval(clubId, selectedQuarterId, selectedUnitId, 'REJECTED', {
+      id: user.id,
+      nome: user.nome,
+      email: user.email ?? ''
+    }, reason);
+    await loadQuarterData(selectedQuarterId);
   };
 
   const handleCreateRequirement = async () => {
@@ -487,13 +527,28 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-3">
+                <div className="flex flex-wrap gap-2 pt-3 items-center">
                   <button
                     onClick={() => setSelectedUnitId(row.unidade.id)}
                     className="px-4 py-2 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase flex items-center gap-2"
                   >
                     <FileText size={14} /> Ver requisitos
                   </button>
+                  {(() => {
+                    const docStatus = progressDocs.find(d => d.unitId === row.unidade.id && d.quarterId === selectedQuarterId)?.approvalStatus ?? 'PENDING';
+                    const badgeMap: Record<RankingApprovalStatus, { label: string; cls: string }> = {
+                      PENDING: { label: 'Pendente', cls: 'bg-gray-700/50 text-gray-400 border-gray-600/30' },
+                      SUBMITTED: { label: 'Aguardando', cls: 'bg-yellow-900/30 text-yellow-400 border-yellow-500/30' },
+                      APPROVED: { label: 'Aprovado', cls: 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' },
+                      REJECTED: { label: 'Rejeitado', cls: 'bg-red-900/30 text-red-400 border-red-500/30' }
+                    };
+                    const badge = badgeMap[docStatus];
+                    return (
+                      <span className={`px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -503,6 +558,15 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
 
       {selectedUnit && (
         <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-6 space-y-6 shadow-xl">
+          <ApprovalStatusBar
+            status={currentApprovalStatus}
+            approvalMeta={currentDoc?.approvalMeta}
+            perfil={user.perfil}
+            onSubmit={handleSubmitForApproval}
+            onApprove={handleApprove}
+            onReject={handleReject}
+          />
+
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Unidade</p>
@@ -530,14 +594,16 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                   Penal -{formatNumber(selectedTotals.penalty)}
                 </div>
               </div>
-              <button
-                onClick={handleSaveUnit}
-                disabled={saving || !selectedQuarterId || !selectedUnitId}
-                className="px-5 py-3 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-[0.2em] disabled:opacity-60 flex items-center gap-2"
-              >
-                {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
-                Salvar unidade
-              </button>
+              {!isFieldReadonly && (
+                <button
+                  onClick={handleSaveUnit}
+                  disabled={saving || !selectedQuarterId || !selectedUnitId}
+                  className="px-5 py-3 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-[0.2em] disabled:opacity-60 flex items-center gap-2"
+                >
+                  {saving ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                  Salvar unidade
+                </button>
+              )}
             </div>
           </div>
 
@@ -605,12 +671,13 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                         {allowsCompletionToggle(requirement) && (
-                          <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
+                          <label className={`flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                             <input
                               type="checkbox"
                               className="w-4 h-4 accent-[#E53935]"
                               checked={!!row?.completed}
-                              onChange={e => handleChange(requirement, { completed: e.target.checked })}
+                              disabled={isFieldReadonly}
+                              onChange={e => !isFieldReadonly && handleChange(requirement, { completed: e.target.checked })}
                             />
                             <span className="text-sm font-bold text-gray-200">Cumprido</span>
                           </label>
@@ -626,8 +693,10 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                               min={0}
                               max={requirement.maxQuantity ?? undefined}
                               value={row?.quantity ?? 0}
-                              onChange={e => handleChange(requirement, { quantity: Number(e.target.value) })}
-                              className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                              readOnly={isFieldReadonly}
+                              disabled={isFieldReadonly}
+                              onChange={e => !isFieldReadonly && handleChange(requirement, { quantity: Number(e.target.value) })}
+                              className={`w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : ''}`}
                             />
                           </div>
                         )}
@@ -640,8 +709,10 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                               min={0}
                               max={requirement.maxManualScore ?? undefined}
                               value={row?.manualScore ?? 0}
-                              onChange={e => handleChange(requirement, { manualScore: Number(e.target.value) })}
-                              className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                              readOnly={isFieldReadonly}
+                              disabled={isFieldReadonly}
+                              onChange={e => !isFieldReadonly && handleChange(requirement, { manualScore: Number(e.target.value) })}
+                              className={`w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : ''}`}
                             />
                           </div>
                         )}
@@ -650,12 +721,13 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                           <div className="space-y-1">
                             <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">{bonusInputLabel(requirement)}</label>
                             {requirement.bonusType === 'FIXED' ? (
-                              <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
+                              <label className={`flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                                 <input
                                   type="checkbox"
                                   className="w-4 h-4 accent-[#E53935]"
                                   checked={(row?.bonusInput ?? 0) > 0}
-                                  onChange={e => handleChange(requirement, { bonusInput: e.target.checked ? 1 : 0 })}
+                                  disabled={isFieldReadonly}
+                                  onChange={e => !isFieldReadonly && handleChange(requirement, { bonusInput: e.target.checked ? 1 : 0 })}
                                 />
                                 <span className="text-sm font-bold text-gray-200">Aplicar bônus</span>
                               </label>
@@ -664,8 +736,10 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                                 type="number"
                                 min={0}
                                 value={row?.bonusInput ?? 0}
-                                onChange={e => handleChange(requirement, { bonusInput: Number(e.target.value) })}
-                                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                                readOnly={isFieldReadonly}
+                                disabled={isFieldReadonly}
+                                onChange={e => !isFieldReadonly && handleChange(requirement, { bonusInput: Number(e.target.value) })}
+                                className={`w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : ''}`}
                               />
                             )}
                           </div>
@@ -675,12 +749,13 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                           <div className="space-y-1">
                             <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">{penaltyInputLabel(requirement)}</label>
                             {requirement.penaltyType === 'FIXED' ? (
-                              <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
+                              <label className={`flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                                 <input
                                   type="checkbox"
                                   className="w-4 h-4 accent-[#E53935]"
                                   checked={(row?.penaltyInput ?? 0) > 0}
-                                  onChange={e => handleChange(requirement, { penaltyInput: e.target.checked ? 1 : 0 })}
+                                  disabled={isFieldReadonly}
+                                  onChange={e => !isFieldReadonly && handleChange(requirement, { penaltyInput: e.target.checked ? 1 : 0 })}
                                 />
                                 <span className="text-sm font-bold text-gray-200">Aplicar penalidade</span>
                               </label>
@@ -689,8 +764,10 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                                 type="number"
                                 min={0}
                                 value={row?.penaltyInput ?? 0}
-                                onChange={e => handleChange(requirement, { penaltyInput: Number(e.target.value) })}
-                                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                                readOnly={isFieldReadonly}
+                                disabled={isFieldReadonly}
+                                onChange={e => !isFieldReadonly && handleChange(requirement, { penaltyInput: Number(e.target.value) })}
+                                className={`w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : ''}`}
                               />
                             )}
                           </div>
@@ -699,9 +776,11 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                         <div className="space-y-1 md:col-span-2 xl:col-span-4">
                           <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Observação</label>
                           <input
-                            className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
+                            className={`w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold ${isFieldReadonly ? 'opacity-60 cursor-not-allowed' : ''}`}
                             value={row?.notes || ''}
-                            onChange={e => handleChange(requirement, { notes: e.target.value })}
+                            readOnly={isFieldReadonly}
+                            disabled={isFieldReadonly}
+                            onChange={e => !isFieldReadonly && handleChange(requirement, { notes: e.target.value })}
                             placeholder="Observação rápida"
                           />
                         </div>
@@ -719,25 +798,27 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
             </div>
           )}
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-[#0B0F1A] border border-[#1F2937] rounded-2xl">
-            <div className="flex gap-3 items-center">
-              <AlertCircle className="text-[#FFD60A]" size={20} />
-              <div className="text-sm text-gray-300">
-                <p className="font-bold">Salvamento por unidade</p>
-                <p className="text-gray-500 text-xs">
-                  Marque todos os requisitos desta unidade e use um único botão de salvar no final.
-                </p>
+          {!isFieldReadonly && (
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-[#0B0F1A] border border-[#1F2937] rounded-2xl">
+              <div className="flex gap-3 items-center">
+                <AlertCircle className="text-[#FFD60A]" size={20} />
+                <div className="text-sm text-gray-300">
+                  <p className="font-bold">Salvamento por unidade</p>
+                  <p className="text-gray-500 text-xs">
+                    Marque todos os requisitos desta unidade e use um único botão de salvar no final.
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={handleSaveUnit}
+                disabled={saving || !selectedQuarterId || !selectedUnitId}
+                className="px-5 py-3 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-[0.2em] disabled:opacity-60 flex items-center gap-2"
+              >
+                {saving ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+                Salvar unidade
+              </button>
             </div>
-            <button
-              onClick={handleSaveUnit}
-              disabled={saving || !selectedQuarterId || !selectedUnitId}
-              className="px-5 py-3 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-[0.2em] disabled:opacity-60 flex items-center gap-2"
-            >
-              {saving ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-              Salvar unidade
-            </button>
-          </div>
+          )}
         </div>
       )}
       </>

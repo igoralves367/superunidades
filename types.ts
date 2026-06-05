@@ -438,6 +438,17 @@ export interface AutoFrequenciaResult {
   };
 }
 
+export type RankingApprovalStatus = 'PENDING' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+export interface RankingApprovalMeta {
+  status: RankingApprovalStatus;
+  submittedAt?: any;
+  submittedBy?: { id: string; nome: string; email: string };
+  reviewedAt?: any;
+  reviewedBy?: { id: string; nome: string; email: string };
+  rejectionReason?: string;
+}
+
 export interface RankingUnitProgressDoc {
   id: string;
   quarterId: string;
@@ -445,6 +456,8 @@ export interface RankingUnitProgressDoc {
   clubeId: string;
   totalPoints: number;
   resultados: Record<string, RankingProgressEntry>;
+  approvalStatus?: RankingApprovalStatus;
+  approvalMeta?: RankingApprovalMeta;
   firstSavedAt?: any;
   updatedAt?: any;
 }

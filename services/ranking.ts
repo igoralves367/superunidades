@@ -193,7 +193,8 @@ export const buildRankingRows = (
   return units
     .map(unidade => {
       const doc = progressByUnit.get(unidade.id);
-      const totals = calculateRankingTotals(requirements, doc?.resultados || {});
+      const isApproved = !doc?.approvalStatus || doc.approvalStatus === 'APPROVED';
+      const totals = calculateRankingTotals(requirements, isApproved ? doc?.resultados || {} : {});
 
       return {
         unidade,

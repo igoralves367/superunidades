@@ -53,7 +53,7 @@ import {
   VarAccessLogEntry
 } from '../types';
 import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
-import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
+import { RANKING_SEED_VERSION, DEPRECATED_SEED_IDS_V2_TO_V3, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
 import { baseUnitsSeed } from '../seed/baseUnits';
 import { calculateRequirementBreakdown } from './ranking';
 
@@ -1168,6 +1168,10 @@ export const ensureDefaultRanking = async (clubId: string) => {
   const batch = writeBatch(db);
   const quarters = buildDefaultRankingQuarters(year);
   const requirements = buildDefaultRankingRequirements(year);
+
+  DEPRECATED_SEED_IDS_V2_TO_V3.forEach(id => {
+    batch.delete(doc(db, 'clubs', clubId, 'ranking_requirements', id));
+  });
 
   quarters.forEach(quarter => {
     batch.set(doc(db, 'clubs', clubId, 'ranking_quarters', quarter.id), quarter, { merge: true });

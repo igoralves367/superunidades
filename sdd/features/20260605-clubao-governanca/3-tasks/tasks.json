@@ -1,0 +1,13 @@
+{
+  "feature": "clubao-governanca",
+  "tasks": [
+    { "id": "TASK-001", "title": "Adicionar RankingApprovalStatus, RankingApprovalMeta e campos em RankingUnitProgressDoc (types.ts)", "layer": 1, "status": "done" },
+    { "id": "TASK-002", "title": "Filtrar approvalStatus === APPROVED em buildRankingRows (ranking.ts)", "layer": 1, "status": "done" },
+    { "id": "TASK-003", "title": "Adicionar submitRankingUnitForApproval e reviewRankingUnitApproval (firestoreDb.ts)", "layer": 1, "status": "done" },
+    { "id": "TASK-004", "title": "Ajustar saveRankingUnitProgress com forceApprove e reset de status (firestoreDb.ts)", "layer": 1, "status": "done" },
+    { "id": "TASK-005", "title": "Criar ApprovalStatusBar.tsx (badge + botões por perfil/status)", "layer": 1, "status": "done" },
+    { "id": "TASK-006", "title": "Integrar ApprovalStatusBar em Clubao.tsx + handlers + readonly nos campos", "layer": 1, "status": "done" },
+    { "id": "TASK-007", "title": "TypeScript check zero erros novos", "layer": 2, "status": "done" },
+    { "id": "TASK-008", "title": "Code review — multi-tenant, segurança, padrões", "layer": 3, "status": "done" }
+  ]
+}

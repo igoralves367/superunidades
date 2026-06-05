@@ -1,0 +1,40 @@
+{
+  "feature": "clubao-q3",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Adicionar rankingRequirementsQuarter3Seed (20 seeds) em seed/rankingSeed.ts",
+      "layer": 1,
+      "status": "done",
+      "description": "Criar array com os 20 requisitos do Q3 conforme spec técnica."
+    },
+    {
+      "id": "TASK-002",
+      "title": "Bumpar RANKING_SEED_VERSION para 4",
+      "layer": 1,
+      "status": "done",
+      "description": "Incrementar versão de 3 para 4 para disparar re-seed automático nos clubes existentes."
+    },
+    {
+      "id": "TASK-003",
+      "title": "Atualizar DEFAULT_RANKING_REQUIREMENT_SEEDS com ...rankingRequirementsQuarter3Seed",
+      "layer": 1,
+      "status": "done",
+      "description": "Adicionar spread do array Q3 na lista padrão de seeds."
+    },
+    {
+      "id": "TASK-004",
+      "title": "TypeScript check sem novos erros",
+      "layer": 2,
+      "status": "done",
+      "description": "npx tsc --noEmit — erros existentes em Modal.tsx e firebase.ts são pré-existentes e não relacionados."
+    },
+    {
+      "id": "TASK-005",
+      "title": "Code review — padrões multi-tenant e segurança",
+      "layer": 3,
+      "status": "done",
+      "description": "Seed puro sem acesso direto ao Firestore. Operações Firestore ocorrem em firestoreDb.ts já validado. Sem secrets, sem deleteDoc em recursos principais."
+    }
+  ]
+}

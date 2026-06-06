@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { 
-  Flag, LayoutDashboard, LogOut, Target, Trophy, Users, DollarSign, CalendarClock, Music2
+  Flag, LayoutDashboard, LogOut, Target, Trophy, Users, DollarSign, CalendarClock, Music2, Dna
 } from 'lucide-react';
 import { PerfilAcesso } from '../types';
 
@@ -22,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTa
     { id: 'reunioes', label: 'Reuniões', icon: CalendarClock, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
     { id: 'financeiro', label: 'Financeiro', icon: DollarSign, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.FINANCEIRO] },
     { id: 'clubao', label: 'Clubão', icon: Target, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
+    { id: 'dna-unidade', label: 'DNA da Unidade', icon: Dna, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
     { id: 'ranking', label: 'Ranking', icon: Trophy, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
   ];
 

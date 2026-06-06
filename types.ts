@@ -519,3 +519,17 @@ export interface VarConfig {
   createdAt?: any;
   updatedAt?: any;
 }
+
+// DNA da Unidade — indicadores estratégicos derivados de dados existentes (read-only).
+export interface UnitDnaData {
+  rankingPercent: number | null;      // 0-1; null se sem trimestre ativo
+  rankingStars: 3 | 4 | 5 | null;     // null se rankingPercent === null
+  rankingCompletedCount: number;
+  rankingTotalRequirements: number;
+  frequencyPercent: number | null;    // 0-100; null se sem reuniões/membros
+  frequencyMemberCount: number;
+  frequencyTotalMeetings: number;
+  classesAvgPercent: number | null;   // 0-100; null se nenhum desbravador com classe
+  classesCompletedCount: number;      // desbravadores com 100% na classe atual
+  classesMemberCount: number;         // desbravadores com classeId atribuído
+}

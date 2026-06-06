@@ -13,6 +13,7 @@ import { Financeiro } from './pages/Financeiro';
 import { Reunioes } from './pages/Reunioes';
 import { PublicChamada } from './pages/PublicChamada';
 import { Fanfarra } from './pages/Fanfarra';
+import { UnitDnaPanel } from './components/UnitDna/UnitDnaPanel';
 import { PublicFanfarra } from './pages/PublicFanfarra';
 import { PublicVencedor } from './pages/PublicVencedor';
 import { PublicVar } from './pages/PublicVar';
@@ -95,6 +96,8 @@ const App: React.FC = () => {
         return <Reunioes user={currentUser} />;
       case 'fanfarra':
         return <Fanfarra user={currentUser} />;
+      case 'dna-unidade':
+        return <UnitDnaPanel user={currentUser} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center p-10">

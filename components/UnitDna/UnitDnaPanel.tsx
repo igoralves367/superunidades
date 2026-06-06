@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Dna, AlertCircle } from 'lucide-react';
-import { Usuario, Unidade } from '../../types';
+import { Usuario, Unidade, PerfilAcesso } from '../../types';
 import * as fs from '../../services/firestoreDb';
 import { buildRankingRows } from '../../services/ranking';
 import { buildFrequencySummary } from '../../services/frequencia';
@@ -44,9 +44,27 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
   const [loading, setLoading] = useState(true);
   const [unidade, setUnidade] = useState<Unidade | null>(null);
   const [dna, setDna] = useState<DnaState>(EMPTY_STATE);
+  const [allUnits, setAllUnits] = useState<Unidade[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
-  const effectiveUnitId = unidadeIdOverride ?? user.unidadeId ?? null;
   const clubeId = user.clubeId;
+  const isDiretoria = user.perfil === PerfilAcesso.DIRETORIA;
+  // Diretoria sem unidade vinculada escolhe qual inspecionar; demais usam a vinculada.
+  const effectiveUnitId = unidadeIdOverride ?? user.unidadeId ?? selectedUnitId ?? null;
+
+  // Carrega a lista de unidades para o seletor da Diretoria.
+  useEffect(() => {
+    if (!clubeId || !isDiretoria) return;
+    let cancelled = false;
+    fs.listUnidades(clubeId)
+      .then(units => {
+        if (!cancelled) setAllUnits(units);
+      })
+      .catch(err => console.error('Erro ao carregar unidades:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [clubeId, isDiretoria]);
 
   useEffect(() => {
     if (!clubeId || !effectiveUnitId) {
@@ -167,6 +185,40 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
   }, [clubeId, effectiveUnitId]);
 
   if (!effectiveUnitId) {
+    // Diretoria não tem unidade vinculada: oferecer seletor em vez de erro.
+    if (isDiretoria) {
+      return (
+        <div className="space-y-6">
+          <header className="flex items-center gap-3">
+            <Dna className="text-[#22D3EE]" size={28} />
+            <div>
+              <h1 className="text-xl font-extrabold text-white">DNA da Unidade</h1>
+              <p className="text-xs font-medium text-gray-400">
+                Selecione uma unidade para inspecionar os indicadores
+              </p>
+            </div>
+          </header>
+          <div className="max-w-sm">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Unidade
+            </label>
+            <select
+              value={selectedUnitId ?? ''}
+              onChange={e => setSelectedUnitId(e.target.value || null)}
+              className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white focus:border-[#22D3EE] focus:outline-none"
+            >
+              <option value="">Selecione...</option>
+              {allUnits.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center">
         <AlertCircle className="text-yellow-500" size={40} />
@@ -192,14 +244,27 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center gap-3">
         <Dna className="text-[#22D3EE]" size={28} />
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-extrabold text-white">DNA da Unidade</h1>
           <p className="text-xs font-medium text-gray-400">
             {unidade?.nome ?? 'Unidade'} — indicadores do trimestre ativo
           </p>
         </div>
+        {isDiretoria && !user.unidadeId && (
+          <select
+            value={selectedUnitId ?? ''}
+            onChange={e => setSelectedUnitId(e.target.value || null)}
+            className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm font-semibold text-white focus:border-[#22D3EE] focus:outline-none"
+          >
+            {allUnits.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.nome}
+              </option>
+            ))}
+          </select>
+        )}
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -265,7 +265,7 @@ export const PublicVar: React.FC = () => {
 
         if (cancelled) return;
 
-        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.tipo !== 'DIRETORIA');
+        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.participatesClubao !== false);
         const activeQuarter =
           fetchedQuarters.find(q => q.status === 'ACTIVE') ||
           fetchedQuarters.find(q => q.status === 'CLOSED') ||

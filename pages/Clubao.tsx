@@ -12,6 +12,7 @@ import {
 } from '../services/ranking';
 import { ValidacoesPanel } from '../components/Validacoes/ValidacoesPanel';
 import { AprovacoesPanel } from '../components/Aprovacoes/AprovacoesPanel';
+import { useToast } from '../store/ToastContext';
 
 type ClubaoTab = 'ranking' | 'validacoes' | 'aprovacoes';
 
@@ -88,6 +89,7 @@ const showPenaltyInput = (requirement: RankingRequirement) =>
 
 export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
   const clubId = user.clubeId;
+  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -114,7 +116,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
         fs.listRankingQuarters(clubId)
       ]);
 
-      const eligibleUnits = fetchedUnits.filter(unit => unit.ativo && unit.tipo !== 'DIRETORIA');
+      const eligibleUnits = fetchedUnits.filter(unit => unit.ativo && unit.participatesClubao !== false);
       const activeQuarter =
         fetchedQuarters.find(quarter => quarter.ativo && quarter.status === 'ACTIVE') ||
         fetchedQuarters.find(quarter => quarter.ativo && quarter.status === 'CLOSED') ||
@@ -226,10 +228,10 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
         email: user.email
       });
       await loadQuarterData(selectedQuarterId);
-      alert('Unidade salva com sucesso.');
+      toastSuccess('Unidade salva com sucesso.');
     } catch (error) {
       console.error(error);
-      alert('Erro ao salvar a unidade.');
+      toastError('Erro ao salvar a unidade.');
     } finally {
       setSaving(false);
     }
@@ -243,7 +245,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
     const points = Math.max(0, Number(newRequirementForm.points) || 0);
 
     if (!name) {
-      alert('Informe o texto do requisito.');
+      toastWarning('Informe o texto do requisito.');
       return;
     }
 
@@ -276,7 +278,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
       await loadQuarterData(selectedQuarterId);
     } catch (error) {
       console.error(error);
-      alert('Erro ao adicionar requisito.');
+      toastError('Erro ao adicionar requisito.');
     } finally {
       setSavingRequirement(false);
     }
@@ -285,7 +287,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
   const handleDeleteRequirement = async (requirement: RankingRequirement) => {
     if (!clubId || !selectedQuarterId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
     if (requirement.origem !== 'CUSTOM') {
-      alert('Somente requisitos adicionados manualmente podem ser removidos.');
+      toastWarning('Somente requisitos adicionados manualmente podem ser removidos.');
       return;
     }
     if (!window.confirm(`Remover o requisito "${requirement.name}" deste trimestre?`)) return;
@@ -296,7 +298,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
       await loadQuarterData(selectedQuarterId);
     } catch (error) {
       console.error(error);
-      alert('Erro ao remover requisito.');
+      toastError('Erro ao remover requisito.');
     } finally {
       setSavingRequirement(false);
     }

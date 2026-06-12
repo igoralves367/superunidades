@@ -82,7 +82,7 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
     let cancelled = false;
     fs.listUnidades(clubeId)
       .then(units => {
-        if (!cancelled) setAllUnits(units);
+        if (!cancelled) setAllUnits(units.filter(u => u.ativo && u.participatesClubao !== false));
       })
       .catch(err => console.error('Erro ao carregar unidades:', err));
     return () => {

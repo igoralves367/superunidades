@@ -667,22 +667,44 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(0,178,255,0.12),_transparent_25%),linear-gradient(180deg,#050816_0%,#0B0F1A_100%)] text-gray-100">
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+      `}</style>
       <div className="max-w-2xl mx-auto px-4 py-8 sm:py-12 space-y-5">
 
         {/* Header */}
-        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] p-6 text-center space-y-3">
+        <header className="text-center space-y-3 py-4">
           <div className="flex justify-center">
-            <div className="w-20 h-20 rounded-[20px] bg-[#0B0F1A] border border-white/10 overflow-hidden flex items-center justify-center">
+            <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
+              style={{
+                border: '2px solid rgba(255,255,255,0.12)',
+                boxShadow: '0 0 24px rgba(0,178,255,0.15)',
+                background: '#0B0F1A',
+              }}
+            >
               {unit.imageUrl
-                ? <img src={unit.imageUrl} alt={unit.nome} className="w-full h-full object-contain" />
+                ? <img src={unit.imageUrl} alt={unit.nome} className="w-full h-full object-cover" />
                 : <span className="font-black text-2xl text-gray-300">{fallbackAvatar(unit.nome)}</span>
               }
             </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-black tracking-tight">{unit.nome}</h1>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500 mt-1 font-bold">Painel da Unidade</p>
-          </div>
+          <h1
+            className="text-3xl sm:text-4xl font-black tracking-widest uppercase"
+            style={{
+              background: 'linear-gradient(90deg, #FFFFFF 0%, #FFD60A 50%, #FFFFFF 100%)',
+              backgroundSize: '200% auto',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              animation: 'shimmer 4s linear infinite',
+              textShadow: 'none',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {unit.nome}
+          </h1>
         </header>
 
         {/* Progresso */}
@@ -822,6 +844,26 @@ const MainEngagementView: React.FC<MainEngagementViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#06050E_0%,#0B0A18_100%)] text-gray-100 overflow-hidden">
+      <style>{`
+        @keyframes flame-flicker {
+          0%,100% { transform: scaleY(1) rotate(-2deg); opacity: 1; }
+          25%      { transform: scaleY(1.15) rotate(2deg); opacity: 0.85; }
+          50%      { transform: scaleY(0.92) rotate(-1deg); opacity: 1; }
+          75%      { transform: scaleY(1.08) rotate(3deg); opacity: 0.90; }
+        }
+        @keyframes glow-pulse {
+          0%,100% { box-shadow: 0 0 18px 4px rgba(251,146,60,0.35), 0 0 40px 8px rgba(239,68,68,0.15); }
+          50%      { box-shadow: 0 0 30px 8px rgba(251,146,60,0.55), 0 0 60px 16px rgba(239,68,68,0.25); }
+        }
+        @keyframes border-glow {
+          0%,100% { border-color: rgba(251,146,60,0.45); }
+          50%      { border-color: rgba(251,146,60,0.85); }
+        }
+        .flame-emoji { display: inline-block; animation: flame-flicker 1.4s ease-in-out infinite; transform-origin: bottom center; }
+        .hot-card   { animation: border-glow 2s ease-in-out infinite; }
+        .hot-img    { animation: glow-pulse 2s ease-in-out infinite; }
+      `}</style>
+
       <div className="max-w-3xl mx-auto px-3 py-6 sm:px-4 sm:py-10 space-y-6">
 
         {/* Header */}
@@ -840,69 +882,87 @@ const MainEngagementView: React.FC<MainEngagementViewProps> = ({
           </div>
         </header>
 
-        {/* Grid de todas as unidades */}
-        <section className="rounded-[28px] border border-white/8 bg-[#0B0A18]/80 p-5 sm:p-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {/* Unidades em chamas — destaque */}
+        {hotRows.length > 0 && (
+          <section>
+            <div className={`grid gap-4 ${hotRows.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+              {hotRows.map(row => (
+                <div
+                  key={row.unidade.id}
+                  className="hot-card relative rounded-[24px] overflow-hidden border bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(239,68,68,0.10),rgba(11,10,24,0.97))]"
+                >
+                  {/* Glow de fundo */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_90%,rgba(251,146,60,0.22),transparent_65%)] pointer-events-none" />
 
-            {/* Unidades quentes */}
-            {hotRows.map(row => (
-              <div
-                key={row.unidade.id}
-                className="relative rounded-[20px] overflow-hidden border border-orange-500/40 bg-[linear-gradient(135deg,rgba(251,146,60,0.12),rgba(239,68,68,0.08),rgba(11,10,24,0.95))]"
-              >
-                {/* Glow de fundo */}
-                <div className="absolute inset-0 rounded-[20px] bg-[radial-gradient(circle_at_50%_80%,rgba(251,146,60,0.18),transparent_65%)] pointer-events-none" />
+                  <div className="relative flex items-center gap-5 px-6 py-5">
+                    {/* Chamas + imagem */}
+                    <div className="relative shrink-0">
+                      {/* Chamas decorativas acima da imagem */}
+                      <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex gap-0.5 text-xl leading-none select-none">
+                        <span className="flame-emoji" style={{ animationDelay: '0s' }}>🔥</span>
+                        <span className="flame-emoji" style={{ animationDelay: '0.3s', fontSize: '1.3rem' }}>🔥</span>
+                        <span className="flame-emoji" style={{ animationDelay: '0.6s' }}>🔥</span>
+                      </div>
+                      <div className="hot-img w-20 h-20 rounded-2xl overflow-hidden border border-orange-400/40 flex items-center justify-center bg-black/20 mt-3">
+                        {row.unidade.imageUrl
+                          ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
+                          : <span className="font-black text-2xl text-orange-300">{fallbackAvatar(row.unidade.nome)}</span>
+                        }
+                      </div>
+                    </div>
 
-                <div className="relative flex flex-col items-center gap-3 p-4 pt-5">
-                  {/* Badge fogo */}
-                  <div className="absolute top-2.5 right-2.5 text-base leading-none select-none">🔥</div>
-
-                  {/* Bandeira / avatar */}
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-orange-400/30 shadow-[0_0_18px_rgba(251,146,60,0.30)] flex items-center justify-center bg-black/20">
-                    {row.unidade.imageUrl
-                      ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
-                      : <span className="font-black text-xl text-orange-300">{fallbackAvatar(row.unidade.nome)}</span>
-                    }
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-black text-white leading-tight">{row.unidade.nome}</p>
+                      <p className="text-xs text-orange-300/70 mt-0.5">Ativa nesta semana</p>
+                      <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-orange-400/50 bg-orange-400/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-orange-300">
+                        <Zap size={9} className="fill-orange-400 text-orange-400" /> em chamas
+                      </span>
+                    </div>
                   </div>
-
-                  <p className="text-xs font-black text-center leading-tight text-white">{row.unidade.nome}</p>
-
-                  <span className="flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-400/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-orange-300">
-                    <Zap size={8} className="fill-orange-400 text-orange-400" /> em chamas
-                  </span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </section>
+        )}
 
-            {/* Unidades geladas */}
-            {coldRows.map(row => (
-              <div
-                key={row.unidade.id}
-                className="relative rounded-[20px] overflow-hidden border border-sky-900/30 bg-[linear-gradient(135deg,rgba(14,30,60,0.60),rgba(11,10,24,0.95))]"
-              >
-                <div className="relative flex flex-col items-center gap-3 p-4 pt-5">
-                  {/* Badge gelo */}
-                  <div className="absolute top-2.5 right-2.5 text-base leading-none select-none opacity-60">❄️</div>
+        {/* Retângulo escuro com todas as unidades geladas */}
+        {coldRows.length > 0 && (
+          <section className="rounded-[28px] border border-white/8 bg-[#0B0A18]/80 p-5 sm:p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {coldRows.map(row => (
+                <div
+                  key={row.unidade.id}
+                  className="relative rounded-[20px] overflow-hidden border border-sky-900/30 bg-[linear-gradient(135deg,rgba(14,30,60,0.60),rgba(11,10,24,0.95))]"
+                >
+                  <div className="relative flex flex-col items-center gap-3 p-4 pt-5">
+                    <div className="absolute top-2.5 right-2.5 text-sm leading-none select-none opacity-50">❄️</div>
 
-                  {/* Bandeira / avatar — dessaturada */}
-                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-sky-900/40 flex items-center justify-center bg-black/30 opacity-50 grayscale">
-                    {row.unidade.imageUrl
-                      ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
-                      : <span className="font-black text-xl text-sky-500">{fallbackAvatar(row.unidade.nome)}</span>
-                    }
+                    <div className="w-16 h-16 rounded-2xl overflow-hidden border border-sky-900/40 flex items-center justify-center bg-black/30 opacity-50 grayscale">
+                      {row.unidade.imageUrl
+                        ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
+                        : <span className="font-black text-xl text-sky-500">{fallbackAvatar(row.unidade.nome)}</span>
+                      }
+                    </div>
+
+                    <p className="text-xs font-black text-center leading-tight text-gray-500">{row.unidade.nome}</p>
+
+                    <span className="flex items-center gap-1 rounded-full border border-sky-800/30 bg-sky-900/20 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-sky-600/70">
+                      <Snowflake size={8} /> gelada
+                    </span>
                   </div>
-
-                  <p className="text-xs font-black text-center leading-tight text-gray-500">{row.unidade.nome}</p>
-
-                  <span className="flex items-center gap-1 rounded-full border border-sky-800/30 bg-sky-900/20 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-sky-600/70">
-                    <Snowflake size={8} /> gelada
-                  </span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </section>
+        )}
 
-          </div>
-        </section>
+        {/* Nenhuma unidade ativa */}
+        {hotRows.length === 0 && coldRows.length === 0 && (
+          <section className="rounded-[28px] border border-white/8 bg-[#0B0A18]/80 p-10 text-center text-gray-600 text-sm">
+            Nenhuma unidade cadastrada.
+          </section>
+        )}
 
         <p className="text-center text-[10px] uppercase tracking-[0.3em] font-black text-gray-700 pb-6">
           Super Unidades — Unidades em Movimento
@@ -968,7 +1028,7 @@ export const PublicRanking: React.FC = () => {
           fs.getClub(resolvedClubId),
         ]);
 
-        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.tipo !== 'DIRETORIA');
+        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.participatesClubao !== false);
         const activeQuarter = fetchedQuarters.find(q => q.status === 'ACTIVE') || null;
 
         const [fetchedProgress, classProgress] = await Promise.all([

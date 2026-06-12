@@ -43,7 +43,7 @@ export const Units: React.FC = () => {
   }, [clubId]);
 
   const filteredUnits = useMemo(
-    () => units.filter(unit => showInactive || unit.ativo).filter(unit => unit.tipo !== 'DIRETORIA'),
+    () => units.filter(unit => showInactive || unit.ativo),
     [units, showInactive]
   );
 

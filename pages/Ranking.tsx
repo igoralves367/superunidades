@@ -11,6 +11,7 @@ import {
   generateUnitCode,
   getRequirementRuleLabel
 } from '../services/ranking';
+import { useToast } from '../store/ToastContext';
 
 interface RankingProps {
   user: Usuario;
@@ -71,6 +72,7 @@ const penaltyInputLabel = (requirement: RankingRequirement) => {
 
 export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const clubId = user.clubeId;
+  const { success: toastSuccess, error: toastError, warning: toastWarning, info: toastInfo } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -102,7 +104,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
         fs.listRankingQuarters(clubId)
       ]);
       const slug = await fs.ensureClubPublicSlug(clubId);
-      const eligibleUnits = fetchedUnits.filter(unit => unit.ativo && unit.tipo !== 'DIRETORIA');
+      const eligibleUnits = fetchedUnits.filter(unit => unit.ativo && unit.participatesClubao !== false);
       setUnits(eligibleUnits);
       setQuarters(fetchedQuarters);
       setPublicSlug(slug);
@@ -190,7 +192,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       await loadQuarterData(selectedQuarterId);
     } catch (error) {
       console.error(error);
-      alert('Erro ao salvar progresso do ranking.');
+      toastError('Erro ao salvar progresso do ranking.');
     } finally {
       setSaving(false);
     }
@@ -203,7 +205,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       window.setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error(error);
-      alert('Não foi possível copiar o link público.');
+      toastError('Não foi possível copiar o link público.');
     }
   };
 
@@ -231,7 +233,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       window.setTimeout(() => setCopiedVar(false), 2500);
     } catch (error) {
       console.error(error);
-      alert('Não foi possível copiar o link VAR.');
+      toastError('Não foi possível copiar o link VAR.');
     }
   };
 
@@ -248,7 +250,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       window.setTimeout(() => setCopiedVar(false), 2500);
     } catch (error) {
       console.error(error);
-      alert('Erro ao regenerar token VAR.');
+      toastError('Erro ao regenerar token VAR.');
     } finally {
       setRegeneratingVar(false);
     }
@@ -282,7 +284,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       setQuarters(refreshed);
     } catch (error) {
       console.error(error);
-      alert('Erro ao encerrar trimestre.');
+      toastError('Erro ao encerrar trimestre.');
     } finally {
       setClosingQuarter(false);
     }
@@ -299,7 +301,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       setQuarters(refreshed);
     } catch (error) {
       console.error(error);
-      alert('Erro ao ativar trimestre.');
+      toastError('Erro ao ativar trimestre.');
     } finally {
       setClosingQuarter(false);
     }
@@ -326,7 +328,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       if (created) setSelectedQuarterId(created.id);
     } catch (error) {
       console.error(error);
-      alert('Erro ao criar trimestre.');
+      toastError('Erro ao criar trimestre.');
     } finally {
       setCreatingQuarter(false);
     }

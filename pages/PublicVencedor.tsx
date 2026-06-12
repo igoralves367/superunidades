@@ -199,7 +199,7 @@ export const PublicVencedor: React.FC = () => {
         await fs.syncLegacyClubaoToRanking(club.id, activeQuarter.id, fetchedRequirements.filter(r => r.active));
         const fetchedDocs = await fs.listRankingProgress(club.id, activeQuarter.id);
 
-        setUnits(fetchedUnits.filter(u => u.ativo && u.tipo !== 'DIRETORIA'));
+        setUnits(fetchedUnits.filter(u => u.ativo && u.participatesClubao !== false));
         setQuarters(fetchedQuarters.filter(q => q.ativo));
         setRequirements(fetchedRequirements.filter(r => r.active));
         setProgressDocs(fetchedDocs);

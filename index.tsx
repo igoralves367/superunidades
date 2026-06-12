@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import './src/index.css';
 import App from './App';
 import { AuthProvider } from './store/AuthContext';
+import { ToastProvider } from './store/ToastContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,7 +15,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </AuthProvider>
   </React.StrictMode>
 );

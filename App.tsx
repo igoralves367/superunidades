@@ -17,6 +17,7 @@ import { Fanfarra } from './pages/Fanfarra';
 import { PublicFanfarra } from './pages/PublicFanfarra';
 import { PublicVencedor } from './pages/PublicVencedor';
 import { PublicVar } from './pages/PublicVar';
+import { PublicRodada } from './pages/PublicRodada';
 import { PerfilAcesso } from './types';
 import { Menu, AlertCircle, X } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
@@ -25,8 +26,21 @@ import { MaintenanceScreen } from './components/MaintenanceScreen';
 import { getClub, findClubByPublicSlug, setMaintenanceMode } from './services/firestoreDb';
 
 const parsePublicClubId = (hash: string): string => {
-  const m = hash.match(/^#(?:ranking|ranking-publico|agenda|chamada|fanfarra|fanfacoes|vencedor|engajamento)\/([^?#/]+)/);
+  const m = hash.match(/^#(?:ranking|ranking-publico|agenda|chamada|fanfarra|fanfacoes|vencedor|engajamento|rodada)\/([^?#/]+)/);
   return m ? decodeURIComponent(m[1]) : '';
+};
+
+// Detect if the hash targets the Rodada das Unidades page
+const isRodadaRoute = (hash: string): boolean => {
+  if (hash.startsWith('#rodada/')) return true;
+  // Specific slug — only when there's no unit code param (?u=...)
+  if (hash.startsWith('#ranking/super-unidades-nacoes')) {
+    const queryIndex = hash.indexOf('?');
+    if (queryIndex === -1) return true; // sem query string → Rodada
+    const params = new URLSearchParams(hash.slice(queryIndex + 1));
+    if (!params.get('u')) return true; // sem ?u= → Rodada
+  }
+  return false;
 };
 
 const App: React.FC = () => {
@@ -88,11 +102,16 @@ const App: React.FC = () => {
     hashRoute.startsWith('#ranking/') || hashRoute.startsWith('#ranking-publico') ||
     hashRoute.startsWith('#engajamento/') || hashRoute.startsWith('#agenda/') ||
     hashRoute.startsWith('#chamada/') || hashRoute.startsWith('#fanfarra/') ||
-    hashRoute.startsWith('#fanfacoes/') || hashRoute.startsWith('#vencedor/');
+    hashRoute.startsWith('#fanfacoes/') || hashRoute.startsWith('#vencedor/') ||
+    hashRoute.startsWith('#rodada/');
 
   if (isPublicRoute) {
     if (!publicMaintenanceChecked) return <LoadingScreen />;
     if (publicMaintenance) return <MaintenanceScreen />;
+  }
+
+  if (hashRoute.startsWith('#rodada/') || isRodadaRoute(hashRoute)) {
+    return <PublicRodada />;
   }
 
   if (hashRoute.startsWith('#ranking/') || hashRoute.startsWith('#ranking-publico')) {

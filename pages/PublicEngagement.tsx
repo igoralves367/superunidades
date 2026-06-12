@@ -91,7 +91,7 @@ export const PublicEngagement: React.FC = () => {
           fs.listReunioes(resolvedClubId),
           fs.listDesbravadores(resolvedClubId)
         ]);
-        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.tipo !== 'DIRETORIA');
+        const eligibleUnits = fetchedUnits.filter(u => u.ativo && u.participatesClubao !== false);
         const { fetchedPresencas, fetchedDocs } = await loadCheapSignals(resolvedClubId);
         const classProgress = await aggregateClassProgress(resolvedClubId, fetchedDbvs);
         if (cancelled) return;

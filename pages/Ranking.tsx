@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, Play, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc, VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
@@ -90,6 +91,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [publicSlug, setPublicSlug] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
   const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
+  const [creatingQuarter, setCreatingQuarter] = useState(false);
 
   const loadBase = async () => {
     if (!clubId) return;
@@ -102,7 +104,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       const slug = await fs.ensureClubPublicSlug(clubId);
       const eligibleUnits = fetchedUnits.filter(unit => unit.ativo && unit.tipo !== 'DIRETORIA');
       setUnits(eligibleUnits);
-      setQuarters(fetchedQuarters.filter(quarter => quarter.ativo));
+      setQuarters(fetchedQuarters);
       setPublicSlug(slug);
 
       const activeQuarter = fetchedQuarters.find(quarter => quarter.status === 'ACTIVE') || fetchedQuarters[0];
@@ -277,12 +279,56 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     try {
       await fs.updateRankingQuarterStatus(clubId, selectedQuarter.id, 'CLOSED');
       const refreshed = await fs.listRankingQuarters(clubId);
-      setQuarters(refreshed.filter(quarter => quarter.ativo));
+      setQuarters(refreshed);
     } catch (error) {
       console.error(error);
       alert('Erro ao encerrar trimestre.');
     } finally {
       setClosingQuarter(false);
+    }
+  };
+
+  const handleActivateQuarter = async () => {
+    if (!clubId || !selectedQuarter || selectedQuarter.status !== 'CLOSED') return;
+    if (!window.confirm(`Ativar ${selectedQuarter.name}? Ele passará a ser o trimestre em andamento.`)) return;
+
+    setClosingQuarter(true);
+    try {
+      await fs.updateRankingQuarterStatus(clubId, selectedQuarter.id, 'ACTIVE');
+      const refreshed = await fs.listRankingQuarters(clubId);
+      setQuarters(refreshed);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao ativar trimestre.');
+    } finally {
+      setClosingQuarter(false);
+    }
+  };
+
+  const nextMissingQuarterNumber = useMemo((): 1 | 2 | 3 | null => {
+    const existing = new Set(quarters.filter(q => q.ativo !== false).map(q => q.number));
+    for (const n of [1, 2, 3] as const) {
+      if (!existing.has(n)) return n;
+    }
+    return null;
+  }, [quarters]);
+
+  const handleCreateNextQuarter = async () => {
+    if (!clubId || nextMissingQuarterNumber === null) return;
+    const labels = { 1: '1º Trimestre', 2: '2º Trimestre', 3: '3º Trimestre' };
+    if (!window.confirm(`Criar ${labels[nextMissingQuarterNumber]} 2026 com os requisitos padrão?`)) return;
+    setCreatingQuarter(true);
+    try {
+      await fs.ensureQuarterExists(clubId, nextMissingQuarterNumber);
+      const refreshed = await fs.listRankingQuarters(clubId);
+      setQuarters(refreshed);
+      const created = refreshed.find(q => q.number === nextMissingQuarterNumber);
+      if (created) setSelectedQuarterId(created.id);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao criar trimestre.');
+    } finally {
+      setCreatingQuarter(false);
     }
   };
 
@@ -372,9 +418,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     }
   };
 
-  if (loading && quarters.length === 0) {
-    return <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#E53935]" /></div>;
-  }
+  if (loading && quarters.length === 0) return <LoadingScreen inline />;
 
   return (
     <div className="space-y-6">
@@ -384,6 +428,28 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           <p className="text-gray-400 font-medium">Regras reais por trimestre, com bônus, penalidade, recorrência e pontuação manual</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {nextMissingQuarterNumber !== null && (
+            <button
+              onClick={handleCreateNextQuarter}
+              disabled={creatingQuarter}
+              className="px-4 py-2 rounded-xl bg-[#FFD60A]/10 border border-[#FFD60A]/30 text-xs font-black uppercase text-[#FFD60A] flex items-center gap-2 disabled:opacity-50"
+            >
+              {creatingQuarter ? <Loader2 className="animate-spin" size={14} /> : <PlusCircle size={14} />}
+              Criar {nextMissingQuarterNumber}º Trimestre
+            </button>
+          )}
+
+          {selectedQuarter?.status === 'CLOSED' && (
+            <button
+              onClick={handleActivateQuarter}
+              disabled={closingQuarter}
+              className="px-4 py-2 rounded-xl bg-[#00F5A0]/10 border border-[#00F5A0]/30 text-xs font-black uppercase text-[#00F5A0] flex items-center gap-2 disabled:opacity-50"
+            >
+              {closingQuarter ? <Loader2 className="animate-spin" size={14} /> : <Play size={14} />}
+              Ativar trimestre
+            </button>
+          )}
+
           <button
             onClick={handleCloseQuarter}
             disabled={!selectedQuarter || selectedQuarter.status === 'CLOSED' || closingQuarter}
@@ -393,6 +459,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
             {selectedQuarter?.status === 'CLOSED' ? 'Trimestre encerrado' : 'Encerrar trimestre'}
           </button>
 
+          {/* Modo Reta Final oculto — pontuação agora só via VAR ou links individuais
           <button
             onClick={handleTogglePublicMode}
             disabled={!selectedQuarter || selectedQuarter.status === 'CLOSED' || togglingMode}
@@ -409,6 +476,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
             }
             {publicMode === 'RESTRICTED' ? 'Reta Final: Ativa' : 'Modo Reta Final'}
           </button>
+          */}
 
           <button
             onClick={handleCopyLink}
@@ -497,6 +565,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
         </div>
       )}
 
+      {/* Banner Reta Final oculto — ocultar junto com o botão
       {publicMode === 'RESTRICTED' && (
         <div className="rounded-2xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 px-5 py-3 flex items-center gap-3">
           <EyeOff size={16} className="text-[#FFD60A] shrink-0" />
@@ -505,6 +574,7 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
           </p>
         </div>
       )}
+      */}
 
       <section className="grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-6">
         <aside className="space-y-4">

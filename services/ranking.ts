@@ -92,7 +92,6 @@ const calculateBonusPoints = (
 ) => {
   if (!requirement.allowBonus || !requirement.bonusType) return 0;
 
-  const completed = !!entry?.completed;
   const quantity = normalizeQuantity(requirement, entry);
 
   if (requirement.bonusType === 'FIXED') {
@@ -100,7 +99,13 @@ const calculateBonusPoints = (
   }
 
   if (requirement.bonusType === 'PER_UNIT') {
-    return calculateModifierPoints(requirement.bonusType, requirement.bonusValue, entry?.bonusInput ?? quantity);
+    // Use bonusInput if explicitly set (> 0), otherwise fall back to quantity.
+    // This ensures conselheiro submissions (which carry quantity) are honoured on approval.
+    const multiplier =
+      clampNonNegative(entry?.bonusInput) > 0
+        ? clampNonNegative(entry?.bonusInput)
+        : quantity;
+    return clampNonNegative(requirement.bonusValue) * multiplier;
   }
 
   return calculateModifierPoints(requirement.bonusType, requirement.bonusValue, entry?.bonusInput);
@@ -119,6 +124,15 @@ const calculatePenaltyPoints = (
 
   if (requirement.penaltyType === 'PER_UNIT') {
     return calculateModifierPoints(requirement.penaltyType, requirement.penaltyValue, entry?.penaltyInput ?? quantity);
+  }
+
+  if (requirement.penaltyType === 'MANUAL') {
+    // When requiresQuantity, multiply penaltyValue by quantity (e.g. students without uniform × penalty per student).
+    // Otherwise, penaltyInput is the raw value entered by the reviewer.
+    if (requirement.requiresQuantity) {
+      return clampNonNegative(requirement.penaltyValue) * quantity;
+    }
+    return clampNonNegative(entry?.penaltyInput);
   }
 
   return calculateModifierPoints(requirement.penaltyType, requirement.penaltyValue, entry?.penaltyInput);

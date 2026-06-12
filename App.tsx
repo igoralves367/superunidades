@@ -7,19 +7,27 @@ import { Dashboard } from './pages/Dashboard';
 import { Clubao } from './pages/Clubao';
 import { Ranking } from './pages/Ranking';
 import { PublicRanking } from './pages/PublicRanking';
+import { PublicEngagement } from './pages/PublicEngagement';
 import { Units } from './pages/Units';
 import { Membros } from './pages/Membros';
 import { Financeiro } from './pages/Financeiro';
 import { Reunioes } from './pages/Reunioes';
 import { PublicChamada } from './pages/PublicChamada';
 import { Fanfarra } from './pages/Fanfarra';
-import { UnitDnaPanel } from './components/UnitDna/UnitDnaPanel';
 import { PublicFanfarra } from './pages/PublicFanfarra';
 import { PublicVencedor } from './pages/PublicVencedor';
 import { PublicVar } from './pages/PublicVar';
 import { PerfilAcesso } from './types';
-import { Menu, AlertCircle, X, Loader2 } from 'lucide-react';
+import { Menu, AlertCircle, X } from 'lucide-react';
 import { useAuth } from './store/AuthContext';
+import { LoadingScreen } from './components/LoadingScreen';
+import { MaintenanceScreen } from './components/MaintenanceScreen';
+import { getClub, findClubByPublicSlug, setMaintenanceMode } from './services/firestoreDb';
+
+const parsePublicClubId = (hash: string): string => {
+  const m = hash.match(/^#(?:ranking|ranking-publico|agenda|chamada|fanfarra|fanfacoes|vencedor|engajamento)\/([^?#/]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+};
 
 const App: React.FC = () => {
   const { currentUser, isAuthenticated, isInitializing, logout } = useAuth();
@@ -28,6 +36,9 @@ const App: React.FC = () => {
   const [restrictionNotice, setRestrictionNotice] = useState<string | null>(null);
   const [view, setView] = useState<'login' | 'register'>('login');
   const [hashRoute, setHashRoute] = useState(() => window.location.hash || '');
+  const [maintenanceMode, setMaintenanceModeState] = useState(false);
+  const [publicMaintenanceChecked, setPublicMaintenanceChecked] = useState(false);
+  const [publicMaintenance, setPublicMaintenance] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => setHashRoute(window.location.hash || '');
@@ -36,23 +47,60 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && currentUser) {
       setActiveTab('dashboard');
-      setView('login'); // Reseta estado de view caso estivesse em register
+      setView('login');
+      getClub(currentUser.clubeId).then(club => {
+        setMaintenanceModeState(club?.maintenanceMode ?? false);
+      });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
+
+  // For public routes: check maintenance mode once when hash is a public route
+  useEffect(() => {
+    const publicSlug = parsePublicClubId(hashRoute);
+    if (!publicSlug) {
+      setPublicMaintenanceChecked(true);
+      return;
+    }
+    setPublicMaintenanceChecked(false);
+    findClubByPublicSlug(publicSlug).then(club => {
+      setPublicMaintenance(club?.maintenanceMode ?? false);
+      setPublicMaintenanceChecked(true);
+    }).catch(() => {
+      setPublicMaintenance(false);
+      setPublicMaintenanceChecked(true);
+    });
+  }, [hashRoute]);
+
+  const handleToggleMaintenance = async () => {
+    if (!currentUser) return;
+    const next = !maintenanceMode;
+    setMaintenanceModeState(next);
+    await setMaintenanceMode(currentUser.clubeId, next);
+  };
 
   if (isInitializing) {
-    return (
-      <div className="h-screen w-full bg-[#0B0F1A] flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="text-[#E53935] animate-spin" size={40} />
-        <p className="text-gray-400 font-black uppercase text-[10px] tracking-widest animate-pulse">Estabelecendo Conexão Cloud...</p>
-      </div>
-    );
+    return <LoadingScreen />;
+  }
+
+  const isPublicRoute =
+    hashRoute.startsWith('#ranking/') || hashRoute.startsWith('#ranking-publico') ||
+    hashRoute.startsWith('#engajamento/') || hashRoute.startsWith('#agenda/') ||
+    hashRoute.startsWith('#chamada/') || hashRoute.startsWith('#fanfarra/') ||
+    hashRoute.startsWith('#fanfacoes/') || hashRoute.startsWith('#vencedor/');
+
+  if (isPublicRoute) {
+    if (!publicMaintenanceChecked) return <LoadingScreen />;
+    if (publicMaintenance) return <MaintenanceScreen />;
   }
 
   if (hashRoute.startsWith('#ranking/') || hashRoute.startsWith('#ranking-publico')) {
     return <PublicRanking />;
+  }
+
+  if (hashRoute.startsWith('#engajamento/')) {
+    return <PublicEngagement />;
   }
 
   if (hashRoute.startsWith('#agenda/') || hashRoute.startsWith('#chamada/')) {
@@ -96,8 +144,6 @@ const App: React.FC = () => {
         return <Reunioes user={currentUser} />;
       case 'fanfarra':
         return <Fanfarra user={currentUser} />;
-      case 'dna-unidade':
-        return <UnitDnaPanel user={currentUser} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-full text-center p-10">
@@ -115,12 +161,14 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-[#0B0F1A] text-gray-200 overflow-hidden font-inter">
       {/* Sidebar Desktop */}
       <div className="hidden lg:block h-full">
-        <Sidebar 
-          perfil={currentUser!.perfil} 
+        <Sidebar
+          perfil={currentUser!.perfil}
           clubeId={currentUser!.clubeId}
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
           onLogout={logout}
+          maintenanceMode={maintenanceMode}
+          onToggleMaintenance={handleToggleMaintenance}
         />
       </div>
 
@@ -128,12 +176,14 @@ const App: React.FC = () => {
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[300] lg:hidden flex">
           <div className="w-[85vw] max-w-[320px] h-full animate-in slide-in-from-left duration-300 shadow-2xl relative z-10">
-            <Sidebar 
-              perfil={currentUser!.perfil} 
+            <Sidebar
+              perfil={currentUser!.perfil}
               clubeId={currentUser!.clubeId}
-              activeTab={activeTab} 
-              setActiveTab={(tab) => { setActiveTab(tab); setIsMobileMenuOpen(false); }} 
+              activeTab={activeTab}
+              setActiveTab={(tab) => { setActiveTab(tab); setIsMobileMenuOpen(false); }}
               onLogout={logout}
+              maintenanceMode={maintenanceMode}
+              onToggleMaintenance={handleToggleMaintenance}
             />
           </div>
           <div 

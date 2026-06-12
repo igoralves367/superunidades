@@ -47,6 +47,7 @@ export interface Clube {
   nome: string;
   publicSlug?: string;
   varToken?: string;
+  maintenanceMode?: boolean;
 }
 
 export interface MemberInstructorSpecialty {
@@ -82,6 +83,7 @@ export interface Unidade {
   sexo?: 'M' | 'F' | 'MISTO';
   participatesClubao?: boolean;
   imageUrl?: string;
+  sgcLink?: string;
 }
 
 export interface Classe {
@@ -369,6 +371,18 @@ export interface RankingRequirement extends Omit<RankingRequirementSeed, 'quarte
   origem: 'PADRAO' | 'CUSTOM';
 }
 
+export type RequirementSubmissionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface RequirementSubmission {
+  status: RequirementSubmissionStatus;
+  observation?: string;
+  submittedBy?: { id: string; nome: string };
+  submittedAt?: any;
+  reviewedBy?: { id: string; nome: string };
+  reviewedAt?: any;
+  rejectionReason?: string;
+}
+
 export interface RankingProgressEntry {
   requirementId: string;
   completed: boolean;
@@ -384,6 +398,7 @@ export interface RankingProgressEntry {
   updatedAt?: any;
   updatedBy?: { id: string; nome: string; email?: string; };
   validacaoMeta?: ValidacaoMeta;
+  submission?: RequirementSubmission;
 }
 
 export interface ValidacaoMeta {
@@ -447,6 +462,12 @@ export interface RankingUnitProgressDoc {
   resultados: Record<string, RankingProgressEntry>;
   firstSavedAt?: any;
   updatedAt?: any;
+}
+
+// Resultado por unidade do cálculo de engajamento (público, sem dados individuais)
+export interface EngagementRow {
+  unidade: Unidade;
+  hasMovement: boolean; // teve alguma atividade nos últimos 7 dias
 }
 
 // --- REUNIÃO E CHAMADA (PRESENÇA) ---

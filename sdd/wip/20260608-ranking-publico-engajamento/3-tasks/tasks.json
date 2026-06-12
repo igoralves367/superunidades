@@ -1,0 +1,229 @@
+{
+  "feature": "ranking-publico-engajamento",
+  "execution_strategy": "batched",
+  "stats": {
+    "total": 9,
+    "done": 9,
+    "by_layer": {
+      "1": 5,
+      "2": 1,
+      "3": 3
+    }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Adicionar tipo EngagementRow em types.ts",
+      "description": "Criar a interface EngagementRow (unidade, fireIndex, signals, isOnFire) em types.ts, seguindo a convenção de tipos do projeto.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": [],
+      "files": [
+        "types.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Interface EngagementRow exportada com campos unidade, fireIndex, signals{attendance,recentRequirements,classProgress,appActivity}, isOnFire",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": [
+        "DD-1"
+      ]
+    },
+    {
+      "id": "TASK-002",
+      "title": "Implementar services/engagement.ts (função pura + config)",
+      "description": "Criar computeEngagementRows e ENGAGEMENT_CONFIG (pesos + windowDays). Normalização relativa 0..1 por sinal, ponderação, escala 0..100, ordenação desc e marcação isOnFire com regra de empate na 3a posicao. Sem I/O Firestore.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-001"
+      ],
+      "files": [
+        "services/engagement.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: computeEngagementRows retorna linhas ordenadas desc por fireIndex",
+        "AC-2: isOnFire marca top-3 com fireIndex>0 e amplia em empate na 3a (AC-6); indice 0 nunca recebe (AC-7); sinal ausente contribui 0 (AC-11)",
+        "AC-3: ENGAGEMENT_CONFIG concentra pesos e windowDays num unico ponto; now injetado para testabilidade",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": [
+        "DD-1",
+        "DD-2",
+        "DD-4"
+      ]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Adicionar listReuniaoPresencas em firestoreDb.ts",
+      "description": "Criar funcao de leitura da colecao inteira reunioes_presencas do clube, com validateClub(clubId), retornando ReuniaoPresenca[]. Apenas leitura.",
+      "status": "done",
+      "layer": 2,
+      "complexity": "Low",
+      "depends_on": [],
+      "files": [
+        "services/firestoreDb.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: listReuniaoPresencas(clubId) le clubs/{clubId}/reunioes_presencas e valida clubeId",
+        "AC-2: Retorna ReuniaoPresenca[] tipado, sem nenhuma escrita",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-3"
+      ],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-004",
+      "title": "Criar componentes Engagement (FlameBadge + EngagementUnitCard)",
+      "description": "Criar FlameBadge (selo Em chamas com icone Flame animado) e EngagementUnitCard (indice de fogo, barra de intensidade, selo nas top-3), seguindo o estilo visual do PublicRanking.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-001"
+      ],
+      "files": [
+        "components/Engagement/FlameBadge.tsx",
+        "components/Engagement/EngagementUnitCard.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: EngagementUnitCard exibe nome, fireIndex e resumo dos sinais sem dados individuais sensiveis (AC-8)",
+        "AC-2: FlameBadge aparece apenas quando row.isOnFire (US-2)",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-1",
+        "US-2"
+      ],
+      "design_decisions": [
+        "DD-1"
+      ]
+    },
+    {
+      "id": "TASK-005",
+      "title": "Criar pages/PublicEngagement.tsx e registrar rota",
+      "description": "Pagina publica que resolve o clube (slug ou clube-id), carrega dados em paralelo, agrega classProgress so no load inicial (DD-3), chama computeEngagementRows, renderiza lista + top-3 em chamas, com polling. Registrar rota #engajamento em App.tsx antes do gate de auth.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-002",
+        "TASK-003",
+        "TASK-004"
+      ],
+      "files": [
+        "pages/PublicEngagement.tsx",
+        "App.tsx"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Rota #engajamento/{clubId} carrega sem autenticacao, aceitando slug publico ou ID clube- (AC-1)",
+        "AC-2: Exclui unidades ativo===false e tipo DIRETORIA; trata clube nao encontrado e estado vazio (AC-3, AC-4)",
+        "AC-3: classProgress lido apenas no load inicial; polling recarrega sinais baratos (DD-3)",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": [
+        "US-1",
+        "US-2",
+        "US-3"
+      ],
+      "design_decisions": [
+        "DD-3"
+      ]
+    },
+    {
+      "id": "TASK-006",
+      "title": "Testes unitarios de services/engagement.ts (vitest)",
+      "description": "Criar services/engagement.test.ts cobrindo ordenacao, isOnFire, empate na 3a, indice 0, sinal ausente, janela windowDays e normalizacao relativa. Meta >=60% de cobertura da funcao pura.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [
+        "TASK-002"
+      ],
+      "files": [
+        "services/engagement.test.ts"
+      ],
+      "acceptance_criteria": [
+        "AC-1: Testes cobrem AC-6 (empate), AC-7 (indice 0), AC-11 (sinal ausente) e janela windowDays com now injetado",
+        "AC-2: Normalizacao relativa: maior valor bruto de um sinal recebe 1.0",
+        "GATE: npx vitest run passa; cobertura >=60% em engagement.ts"
+      ],
+      "references": [
+        "US-3"
+      ],
+      "design_decisions": [
+        "DD-1",
+        "DD-2"
+      ]
+    },
+    {
+      "id": "TASK-007",
+      "title": "Code review (sdd-code-reviewer)",
+      "description": "Revisar codigo da feature com a skill sdd-code-reviewer: qualidade, padroes React 19/TS e convencoes do projeto.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-005",
+        "TASK-006"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: sdd-code-reviewer executado sem findings bloqueantes",
+        "AC-2: Padroes do projeto e CLAUDE.md respeitados"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-008",
+      "title": "Performance review",
+      "description": "Verificar custo das leituras Firestore (DD-3, polling), uso de useMemo e ausencia de re-renders desnecessarios na pagina publica.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-005"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: classProgress nao e relido no polling; sinais baratos no intervalo (DD-3)",
+        "AC-2: Calculos derivados memoizados; sem leituras redundantes"
+      ],
+      "references": [],
+      "design_decisions": [
+        "DD-3"
+      ]
+    },
+    {
+      "id": "TASK-009",
+      "title": "Security review",
+      "description": "Verificar validateClub em todas as leituras, isolamento multi-tenant por clubeId, ausencia de dados individuais sensiveis na UI publica e nenhuma escrita/segredo exposto.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": [
+        "TASK-005"
+      ],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Toda leitura valida clubeId; nenhuma escrita introduzida",
+        "AC-2: UI publica nao expoe dados individuais sensiveis; sem secrets hardcoded"
+      ],
+      "references": [],
+      "design_decisions": []
+    }
+  ]
+}

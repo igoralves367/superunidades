@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, FileText, Loader2, PlusCircle, Save, Star, Trash2 } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc } from '../types';
 import * as fs from '../services/firestoreDb';
 import {
@@ -10,8 +11,9 @@ import {
   getRequirementRuleLabel
 } from '../services/ranking';
 import { ValidacoesPanel } from '../components/Validacoes/ValidacoesPanel';
+import { AprovacoesPanel } from '../components/Aprovacoes/AprovacoesPanel';
 
-type ClubaoTab = 'ranking' | 'validacoes';
+type ClubaoTab = 'ranking' | 'validacoes' | 'aprovacoes';
 
 interface ClubaoProps {
   user: Usuario;
@@ -73,9 +75,16 @@ const bonusInputLabel = (requirement: RankingRequirement) => {
 const penaltyInputLabel = (requirement: RankingRequirement) => {
   if (!requirement.allowPenalty) return '';
   if (requirement.penaltyType === 'PER_UNIT') return 'Qtd. penalidade';
-  if (requirement.penaltyType === 'MANUAL') return 'Penalidade';
+  if (requirement.penaltyType === 'MANUAL') return 'Penalidade (manual)';
   return 'Aplicar penalidade';
 };
+
+// When penaltyType is MANUAL and requiresQuantity, the quantity field drives the penalty calculation.
+// No separate penaltyInput field is needed in this case.
+const showPenaltyInput = (requirement: RankingRequirement) =>
+  requirement.allowPenalty &&
+  !!requirement.penaltyType &&
+  !(requirement.penaltyType === 'MANUAL' && requirement.requiresQuantity);
 
 export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
   const clubId = user.clubeId;
@@ -293,13 +302,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
     }
   };
 
-  if (loading && quarters.length === 0) {
-    return (
-      <div className="py-20 flex justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" />
-      </div>
-    );
-  }
+  if (loading && quarters.length === 0) return <LoadingScreen inline />;
 
   return (
     <div className="space-y-6">
@@ -347,10 +350,22 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
         >
           Validações
         </button>
+        <button
+          onClick={() => setActiveTab('aprovacoes')}
+          className={`px-4 py-2 rounded-xl text-sm font-black ${
+            activeTab === 'aprovacoes' ? 'bg-[#E53935] text-white' : 'bg-[#0B0F1A] border border-[#1F2937] text-gray-300'
+          }`}
+        >
+          Validação por Unidade
+        </button>
       </div>
 
       {activeTab === 'validacoes' && (
         <ValidacoesPanel clubeId={clubId} user={user} quarters={quarters} unidades={unidades} />
+      )}
+
+      {activeTab === 'aprovacoes' && (
+        <AprovacoesPanel clubeId={clubId} user={user} quarters={quarters} unidades={unidades} />
       )}
 
       {activeTab === 'ranking' && (
@@ -618,8 +633,15 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
 
                         {requirement.requiresQuantity && (
                           <div className="space-y-1">
-                            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">
+                            <label className="text-[10px] uppercase font-black tracking-widest ml-1" style={{
+                              color: requirement.allowPenalty && requirement.penaltyType === 'MANUAL' ? '#FCA5A5' : undefined
+                            }}>
                               {requirement.quantityLabel || 'Quantidade'}
+                              {requirement.allowPenalty && requirement.penaltyType === 'MANUAL' && (
+                                <span className="ml-1 normal-case font-normal text-gray-400">
+                                  (×{requirement.penaltyValue} pts penalidade)
+                                </span>
+                              )}
                             </label>
                             <input
                               type="number"
@@ -671,7 +693,7 @@ export const Clubao: React.FC<ClubaoProps> = ({ user }) => {
                           </div>
                         )}
 
-                        {requirement.allowPenalty && requirement.penaltyType && (
+                        {showPenaltyInput(requirement) && (
                           <div className="space-y-1">
                             <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">{penaltyInputLabel(requirement)}</label>
                             {requirement.penaltyType === 'FIXED' ? (

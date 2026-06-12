@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { LoadingScreen } from '../LoadingScreen';
 import {
   Cargo,
   Classe,
@@ -170,9 +170,7 @@ export const ValidacoesPanel: React.FC<ValidacoesPanelProps> = ({ clubeId, user,
       </div>
 
       {loading ? (
-        <div className="py-16 flex justify-center">
-          <Loader2 className="animate-spin text-[#E53935]" />
-        </div>
+        <LoadingScreen inline />
       ) : requirements.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#1F2937] p-8 text-center text-gray-500">
           Nenhum requisito de validação configurado para este trimestre.

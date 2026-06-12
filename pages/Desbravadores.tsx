@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Search, Plus, Edit2, User, X, Loader2, Info, Trash2, 
-  Shield, MapPin, Layers, CheckCircle, AlertCircle, ChevronDown 
+import {
+  Search, Plus, Edit2, User, X, Loader2, Info, Trash2,
+  Shield, MapPin, Layers, CheckCircle, AlertCircle, ChevronDown
 } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { NeonCard } from '../components/NeonCard';
 import { Badge } from '../components/Badge';
 import { 
@@ -220,7 +221,7 @@ export const Desbravadores: React.FC<DesbravadoresProps> = ({ user }) => {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#E53935]" /></div>;
+  if (loading) return <LoadingScreen inline />;
 
   return (
     <div className="space-y-8 animate-fade-in pb-10">

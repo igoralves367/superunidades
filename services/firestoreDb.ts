@@ -56,6 +56,7 @@ import { DEFAULT_REQUISITOS } from '../seed/defaultRequisitos';
 import { RANKING_SEED_VERSION, buildDefaultRankingQuarters, buildDefaultRankingRequirements } from '../seed/rankingSeed';
 import { baseUnitsSeed } from '../seed/baseUnits';
 import { calculateRequirementBreakdown } from './ranking';
+import { buildSubmittedEntry, buildApprovedEntry, buildRejectedEntry, sumTotalPoints } from './clubaoSubmission';
 
 const validateClub = (clubId: string) => {
   if (!clubId) throw new Error("ID do Clube não identificado.");
@@ -146,6 +147,11 @@ export const getClub = async (clubId: string): Promise<Clube | null> => {
   const snap = await getDoc(doc(db, 'clubs', clubId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Clube;
+};
+
+export const setMaintenanceMode = async (clubId: string, enabled: boolean): Promise<void> => {
+  validateClub(clubId);
+  await updateDoc(doc(db, 'clubs', clubId), { maintenanceMode: enabled });
 };
 
 export const ensureClubPublicSlug = async (clubId: string): Promise<string> => {
@@ -1127,6 +1133,128 @@ export const saveRankingUnitProgress = async (
   }), { merge: true });
 };
 
+export const savePublicUnitProgress = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  resultados: Record<string, RankingProgressEntry>
+) => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const progressRef = doc(db, 'clubs', clubId, 'ranking_progress', docId);
+  const existingSnap = await getDoc(progressRef);
+  const cleanedResults = Object.entries(resultados).reduce<Record<string, RankingProgressEntry>>((acc, [requirementId, value]) => {
+    acc[requirementId] = deepCleanUndefined({
+      requirementId,
+      completed: !!value.completed,
+      quantity: value.quantity ?? null,
+      bonusInput: value.bonusInput ?? 0,
+      penaltyInput: value.penaltyInput ?? 0,
+      manualScore: value.manualScore ?? 0,
+      notes: value.notes || null,
+      basePoints: value.basePoints ?? 0,
+      bonusPoints: value.bonusPoints ?? 0,
+      penaltyPoints: value.penaltyPoints ?? 0,
+      calculatedPoints: value.calculatedPoints ?? 0,
+      validacaoMeta: value.validacaoMeta ?? null,
+      updatedAt: serverTimestamp()
+    });
+    return acc;
+  }, {});
+  const totalPoints = Object.values(resultados).reduce((sum, v) => sum + Number(v.calculatedPoints || 0), 0);
+  await setDoc(progressRef, deepCleanUndefined({
+    id: docId,
+    quarterId,
+    unitId,
+    clubeId: clubId,
+    totalPoints,
+    resultados: cleanedResults,
+    origemSubmissao: 'CONSELHEIRO_PUBLICO',
+    firstSavedAt: existingSnap.exists() ? existingSnap.data().firstSavedAt || serverTimestamp() : serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }), { merge: true });
+};
+
+// --- AUTO-DECLARAÇÃO DO CONSELHEIRO + VALIDAÇÃO DA DIRETORIA ---
+
+// Aplica uma mudança em um único requisito do mapa `resultados`, preservando os demais
+// e recalculando `totalPoints`. Cria o doc se ainda não existir.
+const patchRequirementEntry = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  requirementId: string,
+  mutate: (current: RankingProgressEntry | undefined) => RankingProgressEntry | null
+): Promise<void> => {
+  validateClub(clubId);
+  const docId = `${quarterId}__${unitId}`;
+  const progressRef = doc(db, 'clubs', clubId, 'ranking_progress', docId);
+  const snap = await getDoc(progressRef);
+  const data = snap.exists() ? (snap.data() as RankingUnitProgressDoc) : null;
+  const resultados: Record<string, RankingProgressEntry> = { ...(data?.resultados || {}) };
+
+  const next = mutate(resultados[requirementId]);
+  if (next === null) {
+    delete resultados[requirementId];
+  } else {
+    resultados[requirementId] = deepCleanUndefined(next);
+  }
+
+  const totalPoints = sumTotalPoints(resultados);
+
+  await setDoc(progressRef, deepCleanUndefined({
+    id: docId,
+    quarterId,
+    unitId,
+    clubeId: clubId,
+    totalPoints,
+    resultados,
+    firstSavedAt: data?.firstSavedAt || data?.updatedAt || serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }), { merge: true });
+};
+
+// Conselheiro marca um requisito como cumprido → PENDENTE (sem aplicar pontos).
+export const submitRequirementByCounselor = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  requirementId: string,
+  payload: { observation?: string; quantity?: number },
+  user: { id: string; nome: string }
+): Promise<void> => {
+  await patchRequirementEntry(clubId, quarterId, unitId, requirementId, current =>
+    buildSubmittedEntry(requirementId, current, payload, user, serverTimestamp())
+  );
+};
+
+// Conselheiro retira a submissão → volta a NÃO SUBMETIDO (remove o requisito do mapa).
+export const withdrawRequirementSubmission = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  requirementId: string
+): Promise<void> => {
+  await patchRequirementEntry(clubId, quarterId, unitId, requirementId, () => null);
+};
+
+// Diretoria aprova ou reprova. Aprovar aplica os pontos ao ranking imediatamente.
+export const reviewRequirementSubmission = async (
+  clubId: string,
+  quarterId: string,
+  unitId: string,
+  requirement: RankingRequirement,
+  decision: 'APPROVE' | 'REJECT',
+  reviewer: { id: string; nome: string },
+  rejectionReason?: string
+): Promise<void> => {
+  await patchRequirementEntry(clubId, quarterId, unitId, requirement.id, current =>
+    decision === 'APPROVE'
+      ? buildApprovedEntry(requirement, current, reviewer, serverTimestamp())
+      : buildRejectedEntry(requirement.id, current, reviewer, serverTimestamp(), rejectionReason)
+  );
+};
+
 // --- VALIDAÇÕES (rascunho separado do ranking) ---
 import { ValidacaoResultadoEntry, ValidacaoUnitDoc } from '../types';
 
@@ -1184,6 +1312,29 @@ export const ensureDefaultRanking = async (clubId: string) => {
     createdAt: metaSnap.exists() ? metaSnap.data().createdAt || serverTimestamp() : serverTimestamp(),
     updatedAt: serverTimestamp()
   }), { merge: true });
+  await batch.commit();
+};
+
+export const ensureQuarterExists = async (clubId: string, quarterNumber: 1 | 2 | 3): Promise<void> => {
+  validateClub(clubId);
+  const year = new Date().getFullYear();
+  const quarters = buildDefaultRankingQuarters(year);
+  const requirements = buildDefaultRankingRequirements(year);
+
+  const quarter = quarters.find(q => q.number === quarterNumber);
+  if (!quarter) return;
+
+  const quarterRef = doc(db, 'clubs', clubId, 'ranking_quarters', quarter.id);
+  const snap = await getDoc(quarterRef);
+  if (snap.exists() && snap.data().ativo !== false) return;
+
+  const batch = writeBatch(db);
+  batch.set(quarterRef, { ...quarter, status: 'CLOSED' });
+  requirements
+    .filter(r => r.quarterId === quarter.id)
+    .forEach(r => {
+      batch.set(doc(db, 'clubs', clubId, 'ranking_requirements', r.id), r, { merge: true });
+    });
   await batch.commit();
 };
 
@@ -1743,6 +1894,13 @@ export const listPresencas = async (clubId: string, reuniaoId: string): Promise<
   validateClub(clubId);
   const q = query(collection(db, 'clubs', clubId, 'reunioes_presencas'), where('reuniaoId', '==', reuniaoId));
   const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as ReuniaoPresenca));
+};
+
+// Lê todas as presenças do clube (somente leitura, usado pelo ranking público de engajamento).
+export const listReuniaoPresencas = async (clubId: string): Promise<ReuniaoPresenca[]> => {
+  validateClub(clubId);
+  const snap = await getDocs(collection(db, 'clubs', clubId, 'reunioes_presencas'));
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as ReuniaoPresenca));
 };
 

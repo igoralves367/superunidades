@@ -1,15 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, Dna, AlertCircle } from 'lucide-react';
-import { Usuario, Unidade, PerfilAcesso } from '../../types';
+import { Dna, AlertCircle } from 'lucide-react';
+import { LoadingScreen } from '../LoadingScreen';
+import { Usuario, Unidade, PerfilAcesso, RankingRequirement, RankingProgressEntry, RankingQuarter } from '../../types';
 import * as fs from '../../services/firestoreDb';
 import { buildRankingRows } from '../../services/ranking';
 import { buildFrequencySummary } from '../../services/frequencia';
+import { requirementId } from '../../services/validacoes';
+import { VALIDACAO_TIPOS } from '../Validacoes/ValidacaoUnitCard';
 import { DnaIndicatorCard } from './DnaIndicatorCard';
+import { CounselorRequirementsList } from './CounselorRequirementsList';
 import { buildDnaClasses, calcDnaStars, DnaProgressEntry } from './dnaClasses';
+
+// RN-5: requisitos elegíveis para auto-declaração do conselheiro excluem os de validação
+// automática (devocional, classes, frequência) e os de pontuação manual (concursos).
+const eligibleForCounselor = (reqs: RankingRequirement[], quarterNumber: number): RankingRequirement[] => {
+  const autoIds = new Set(VALIDACAO_TIPOS.map(t => requirementId(quarterNumber, t.tipo)));
+  return reqs
+    .filter(r => r.active && !autoIds.has(r.id) && r.ruleType !== 'MANUAL_SCORE')
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+};
 
 interface UnitDnaPanelProps {
   user: Usuario;
   unidadeIdOverride?: string | null;
+  embedded?: boolean;
 }
 
 interface DnaState {
@@ -40,17 +54,27 @@ const EMPTY_STATE: DnaState = {
   noActiveQuarter: false
 };
 
-export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverride }) => {
+export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverride, embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [unidade, setUnidade] = useState<Unidade | null>(null);
   const [dna, setDna] = useState<DnaState>(EMPTY_STATE);
   const [allUnits, setAllUnits] = useState<Unidade[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [quarterMode, setQuarterMode] = useState<'active' | 'previous'>('active');
+  const [hasPreviousQuarter, setHasPreviousQuarter] = useState(false);
+  const [eligibleReqs, setEligibleReqs] = useState<RankingRequirement[]>([]);
+  const [myResultados, setMyResultados] = useState<Record<string, RankingProgressEntry>>({});
+  const [viewQuarter, setViewQuarter] = useState<RankingQuarter | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const clubeId = user.clubeId;
   const isDiretoria = user.perfil === PerfilAcesso.DIRETORIA;
+  const isActiveView = quarterMode === 'active';
   // Diretoria sem unidade vinculada escolhe qual inspecionar; demais usam a vinculada.
   const effectiveUnitId = unidadeIdOverride ?? user.unidadeId ?? selectedUnitId ?? null;
+  // Conselheiro/Instrutor da própria unidade pode auto-declarar requisitos.
+  const canDeclare =
+    isActiveView && !isDiretoria && !!user.unidadeId && user.unidadeId === effectiveUnitId;
 
   // Carrega a lista de unidades para o seletor da Diretoria.
   useEffect(() => {
@@ -94,6 +118,15 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
           quarters.find(q => q.ativo) ??
           null;
 
+        // Trimestre anterior = maior número estritamente menor que o ativo.
+        const previousQuarter = activeQuarter
+          ? quarters
+              .filter(q => q.number < activeQuarter.number)
+              .sort((a, b) => b.number - a.number)[0] ?? null
+          : null;
+
+        const targetQuarter = quarterMode === 'previous' ? previousQuarter : activeQuarter;
+
         // Indicador 1 — Clubão (% requisitos cumpridos)
         let rankingPercent: number | null = null;
         let rankingCompletedCount = 0;
@@ -104,11 +137,14 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
         let frequencyMemberCount = 0;
         let frequencyTotalMeetings = 0;
 
-        if (activeQuarter) {
+        let eligible: RankingRequirement[] = [];
+        let resultadosMap: Record<string, RankingProgressEntry> = {};
+
+        if (targetQuarter) {
           const [requirements, progressDocs, presencas] = await Promise.all([
-            fs.listRankingRequirements(clubeId, activeQuarter.id),
-            fs.listRankingProgress(clubeId, activeQuarter.id),
-            fs.listPresencasPorTrimestre(clubeId, activeQuarter.number)
+            fs.listRankingRequirements(clubeId, targetQuarter.id),
+            fs.listRankingProgress(clubeId, targetQuarter.id),
+            fs.listPresencasPorTrimestre(clubeId, targetQuarter.number)
           ]);
 
           const activeRequirements = requirements.filter(r => r.active);
@@ -120,12 +156,16 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
             rankingTotalRequirements = activeRequirements.length;
           }
 
+          eligible = eligibleForCounselor(requirements, targetQuarter.number);
+          resultadosMap =
+            progressDocs.find(d => d.unitId === effectiveUnitId)?.resultados ?? {};
+
           const freq = buildFrequencySummary(
             presencas,
             desbravadores,
             unidades,
             reunioes,
-            activeQuarter.number,
+            targetQuarter.number,
             cargos
           );
           const mySummary = freq.find(s => s.unidadeId === effectiveUnitId);
@@ -158,6 +198,10 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
         if (cancelled) return;
 
         setUnidade(targetUnit);
+        setHasPreviousQuarter(!!previousQuarter);
+        setViewQuarter(targetQuarter);
+        setEligibleReqs(eligible);
+        setMyResultados(resultadosMap);
         setDna({
           rankingPercent,
           rankingStars: calcDnaStars(rankingPercent),
@@ -169,7 +213,7 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
           classesAvgPercent: classes.classesAvgPercent,
           classesCompletedCount: classes.classesCompletedCount,
           classesMemberCount: classes.classesMemberCount,
-          noActiveQuarter: !activeQuarter
+          noActiveQuarter: !targetQuarter
         });
       } catch (err) {
         console.error('Erro ao carregar DNA da unidade:', err);
@@ -182,7 +226,7 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
     return () => {
       cancelled = true;
     };
-  }, [clubeId, effectiveUnitId]);
+  }, [clubeId, effectiveUnitId, quarterMode, reloadKey]);
 
   if (!effectiveUnitId) {
     // Diretoria não tem unidade vinculada: oferecer seletor em vez de erro.
@@ -229,16 +273,7 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
     );
   }
 
-  if (loading) {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" size={40} />
-        <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">
-          Acessando Nuvem...
-        </p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   const rankingDisplay = dna.rankingPercent === null ? null : Math.round(dna.rankingPercent * 100);
 
@@ -247,11 +282,31 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
       <header className="flex flex-wrap items-center gap-3">
         <Dna className="text-[#22D3EE]" size={28} />
         <div className="flex-1">
-          <h1 className="text-xl font-extrabold text-white">DNA da Unidade</h1>
+          <h1 className="text-xl font-extrabold text-white">{embedded ? 'Progresso' : 'DNA da Unidade'}</h1>
           <p className="text-xs font-medium text-gray-400">
-            {unidade?.nome ?? 'Unidade'} — indicadores do trimestre ativo
+            {unidade?.nome ?? 'Unidade'} — {viewQuarter?.name ?? 'indicadores do trimestre'}
           </p>
         </div>
+        {hasPreviousQuarter && (
+          <div className="flex gap-1 rounded-lg border border-gray-700 bg-gray-900 p-1">
+            <button
+              onClick={() => setQuarterMode('active')}
+              className={`rounded-md px-3 py-1 text-xs font-bold ${
+                isActiveView ? 'bg-[#22D3EE] text-[#06222A]' : 'text-gray-400'
+              }`}
+            >
+              Trimestre atual
+            </button>
+            <button
+              onClick={() => setQuarterMode('previous')}
+              className={`rounded-md px-3 py-1 text-xs font-bold ${
+                !isActiveView ? 'bg-[#22D3EE] text-[#06222A]' : 'text-gray-400'
+              }`}
+            >
+              Trimestre anterior
+            </button>
+          </div>
+        )}
         {isDiretoria && !user.unidadeId && (
           <select
             value={selectedUnitId ?? ''}
@@ -295,6 +350,32 @@ export const UnitDnaPanel: React.FC<UnitDnaPanelProps> = ({ user, unidadeIdOverr
           description={`${dna.classesCompletedCount} de ${dna.classesMemberCount} concluíram a classe atual`}
         />
       </div>
+
+      {canDeclare && viewQuarter && (
+        <section className="rounded-2xl border border-[#1F2937] bg-[#111827] p-5 space-y-4">
+          <div>
+            <h2 className="text-lg font-extrabold text-white">Requisitos do Trimestre</h2>
+            <p className="text-xs text-gray-400">
+              Marque o que sua unidade cumpriu e envie para a diretoria validar.
+            </p>
+          </div>
+          <CounselorRequirementsList
+            clubeId={clubeId}
+            quarterId={viewQuarter.id}
+            unitId={effectiveUnitId}
+            user={user}
+            requirements={eligibleReqs}
+            resultados={myResultados}
+            onChanged={() => setReloadKey(k => k + 1)}
+          />
+        </section>
+      )}
+
+      {!isActiveView && (
+        <p className="text-xs text-gray-500">
+          Trimestre anterior em modo leitura — pontuações e validações finalizadas.
+        </p>
+      )}
     </div>
   );
 };

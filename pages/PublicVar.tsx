@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { signInAnonymously } from 'firebase/auth';
 import { auth } from '../firebase';
 import { VarAccessLogEntry } from '../types';
@@ -303,16 +304,7 @@ export const PublicVar: React.FC = () => {
   );
 
   // Loading
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0B0F1A] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="text-[#FFD60A] animate-spin" size={36} />
-          <p className="text-gray-400 text-xs uppercase tracking-widest font-black animate-pulse">Carregando VAR...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   // Token inválido / ausente
   if (!tokenValid) {

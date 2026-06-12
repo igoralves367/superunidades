@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Loader2, Wrench } from 'lucide-react';
+import { Wrench } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import * as fs from '../services/firestoreDb';
 import { Desbravador, FanfarraInstrumento, FanfarraStatusInstrumento, FanfarraTipoInstrumento } from '../types';
 import { FanfarraInstrumentIcon } from '../components/FanfarraInstrumentIcon';
@@ -123,13 +124,7 @@ export const PublicFanfarra: React.FC = () => {
     }));
   }, [instrumentos]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050816] flex items-center justify-center">
-        <Loader2 className="animate-spin text-[#FFD60A]" size={32} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   if (!clubId) {
     return (

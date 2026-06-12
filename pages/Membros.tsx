@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Users, FileWarning, Search, User, Plus, Save, Flag, Trash2 } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { Usuario, Unidade, Desbravador, Cargo, Classe } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
@@ -92,13 +93,7 @@ export const Membros: React.FC<MembrosProps> = ({ user }) => {
     loadData();
   }, [user.clubeId]);
 
-  if (loading) {
-    return (
-      <div className="py-20 flex justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" size={32} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();

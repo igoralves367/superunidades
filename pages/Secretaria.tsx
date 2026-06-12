@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Check, X, Loader2, AlertCircle, Users, Edit2, User, Shield, Plus, CheckCircle } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { PerfilAcesso, Usuario, SecretariaStatus, Desbravador, Unidade, Classe, Cargo, MemberCargo, MemberInstructorSpecialty } from '../types';
 import * as fs from '../services/firestoreDb';
 
@@ -245,12 +246,7 @@ export const Secretaria: React.FC<SecretariaProps> = ({ user }) => {
     }
   }
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <Loader2 className="animate-spin text-[#E53935] mb-4" size={40} />
-      <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Acessando Secretaria Cloud...</p>
-    </div>
-  );
+  if (loading) return <LoadingScreen inline />;
 
   return (
     <div className="space-y-6">

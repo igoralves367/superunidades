@@ -37,6 +37,7 @@ import {
 } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 interface FinanceiroProps {
   user: Usuario;
@@ -2905,9 +2906,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       </header>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-10 h-10 border-4 border-[#1F2937] border-t-[#E53935] rounded-full animate-spin" />
-        </div>
+        <LoadingScreen inline />
       ) : (
         <>
           {activeTab === 'GERAL' && renderGeral()}

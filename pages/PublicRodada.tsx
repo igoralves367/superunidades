@@ -125,20 +125,24 @@ interface UnitCardData {
   config: UnitConfig;
 }
 
-const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right' }> = ({ data, side }) => {
+const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right'; compact?: boolean }> = ({ data, side, compact }) => {
   const { unidade, hasMovement, config } = data;
   const active = hasMovement;
 
-  // Para cards femininos (esquerda), o dot fica à direita do card
-  // Para cards masculinos (direita), o dot fica à esquerda do card — visível pra quem olha o diagrama
   const dotClass = side === 'right'
-    ? 'absolute top-2.5 left-3 w-2 h-2 rounded-full'
-    : 'absolute top-2.5 right-3 w-2 h-2 rounded-full';
+    ? 'absolute top-2 left-2 w-1.5 h-1.5 rounded-full'
+    : 'absolute top-2 right-2 w-1.5 h-1.5 rounded-full';
 
   return (
     <div
-      className="unit-card relative flex items-center gap-3 rounded-[14px] px-4 py-3 transition-all duration-500 select-none"
+      className="unit-card relative flex items-center rounded-[12px] transition-all duration-500 select-none w-full"
       style={{
+        gap: compact ? 5 : 12,
+        padding: compact ? '7px 8px' : undefined,
+        paddingTop: !compact ? 12 : undefined,
+        paddingBottom: !compact ? 12 : undefined,
+        paddingLeft: !compact ? (side === 'right' ? '2rem' : '1rem') : undefined,
+        paddingRight: !compact ? '1rem' : undefined,
         background: active
           ? `linear-gradient(135deg, rgba(${hexToRgb(config.color)},0.12) 0%, rgba(10,14,30,0.95) 100%)`
           : 'linear-gradient(135deg, rgba(15,20,40,0.95) 0%, rgba(8,12,24,0.98) 100%)',
@@ -149,26 +153,26 @@ const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right' }> = ({ da
           ? `0 0 20px -4px ${config.glow}, inset 0 0 20px -12px ${config.glow}`
           : '0 2px 8px rgba(0,0,0,0.4)',
         opacity: active ? 1 : 0.45,
-        minWidth: 200,
-        maxWidth: 240,
         animation: active ? 'cardPulse 3s ease-in-out infinite' : 'none',
-        // cards masculinos: padding extra à esquerda para o dot não sobrepor a bandeira
-        paddingLeft: side === 'right' ? '2rem' : undefined,
       }}
     >
-      {/* Status dot — direita para femininas, esquerda para masculinas */}
-      <div
-        className={dotClass}
-        style={{
-          background: active ? config.color : '#374151',
-          boxShadow: active ? `0 0 6px ${config.color}` : 'none',
-        }}
-      />
+      {/* Status dot — oculto em compact para não sobrepor conteúdo */}
+      {!compact && (
+        <div
+          className={dotClass}
+          style={{
+            background: active ? config.color : '#374151',
+            boxShadow: active ? `0 0 6px ${config.color}` : 'none',
+          }}
+        />
+      )}
 
       {/* Flag / image */}
       <div
-        className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden flex items-center justify-center border-2"
+        className="flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center border-2"
         style={{
+          width: compact ? 28 : 40,
+          height: compact ? 28 : 40,
           borderColor: active ? `rgba(${hexToRgb(config.color)},0.7)` : 'rgba(255,255,255,0.1)',
           background: active ? `rgba(${hexToRgb(config.color)},0.1)` : 'rgba(20,25,50,0.8)',
           boxShadow: active ? `0 0 10px ${config.glow}` : 'none',
@@ -178,8 +182,7 @@ const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right' }> = ({ da
           <img src={unidade.imageUrl} alt={unidade.nome} className="w-full h-full object-cover" />
         ) : (
           <span
-            className="text-sm font-black"
-            style={{ color: active ? config.color : '#6B7280' }}
+            style={{ fontSize: compact ? 9 : 14, fontWeight: 900, color: active ? config.color : '#6B7280' }}
           >
             {unidade.nome.slice(0, 2).toUpperCase()}
           </span>
@@ -188,8 +191,8 @@ const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right' }> = ({ da
 
       {/* Name */}
       <span
-        className="font-black text-sm tracking-wide truncate"
-        style={{ color: active ? '#FFFFFF' : '#6B7280' }}
+        className="font-black tracking-wide truncate"
+        style={{ color: active ? '#FFFFFF' : '#6B7280', fontSize: compact ? 11 : 14 }}
       >
         {unidade.nome}
       </span>
@@ -373,8 +376,10 @@ export const PublicRodada: React.FC = () => {
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const trophyRef = React.useRef<HTMLDivElement>(null);
+  const mobileContainerRef = React.useRef<HTMLDivElement>(null);
+  const mobileTrophyRef = React.useRef<HTMLDivElement>(null);
 
-  // Create stable refs for up to 4 cards on each side
+  // Create stable refs for up to 4 cards on each side (desktop + mobile)
   const leftRefs = [
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
@@ -382,6 +387,18 @@ export const PublicRodada: React.FC = () => {
     React.useRef<HTMLDivElement>(null),
   ];
   const rightRefs = [
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+  ];
+  const mobileLeftRefs = [
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+    React.useRef<HTMLDivElement>(null),
+  ];
+  const mobileRightRefs = [
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
@@ -779,78 +796,96 @@ export const PublicRodada: React.FC = () => {
             </div>
           </div>
 
-          {/* ── MOBILE LAYOUT ── */}
-          <div className="flex md:hidden flex-col items-center gap-5 px-4 py-4 flex-1">
-            {/* Trophy */}
-            <div
-              className="relative flex items-center justify-center"
-              style={{ width: 130, height: 150 }}
-            >
-              <div
-                className="trophy-glow-ring absolute inset-0 rounded-[24px]"
-                style={{
-                  background: 'radial-gradient(ellipse at center, rgba(255,214,10,0.15) 0%, transparent 70%)',
-                  boxShadow: '0 0 40px -8px rgba(255,214,10,0.3)',
-                }}
+          {/* ── MOBILE LAYOUT ── mesmo bracket do desktop, compacto ── */}
+          <div className="flex md:hidden flex-1 items-center justify-center px-3 py-2">
+            <div className="relative w-full" ref={mobileContainerRef}>
+
+              {/* Column labels */}
+              <div className="flex justify-between mb-3 px-1">
+                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500">Femininas</p>
+                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500">Masculinas</p>
+              </div>
+
+              {/* Three-column: left | trophy | right */}
+              <div className="flex items-center gap-2" style={{ position: 'relative', zIndex: 2 }}>
+
+                {/* Left column */}
+                <div className="flex flex-col gap-3 flex-shrink-0" style={{ width: 115 }}>
+                  {leftCards.map((card, i) => (
+                    <div key={card.unidade.id} ref={mobileLeftRefs[i] as React.RefObject<HTMLDivElement>}>
+                      <UnitCard data={card} side="left" compact />
+                    </div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 4 - leftCards.length) }).map((_, i) => (
+                    <div key={`ph-ml-${i}`} className="h-[44px] rounded-[10px]" style={{ border: '1px dashed rgba(255,255,255,0.05)' }} />
+                  ))}
+                </div>
+
+                {/* Center — trophy */}
+                <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: 260 }}>
+                  <div
+                    className="relative flex items-center justify-center"
+                    ref={mobileTrophyRef}
+                    style={{ width: 100, height: 116, zIndex: 2 }}
+                  >
+                    <div
+                      className="trophy-glow-ring absolute inset-0 rounded-[20px]"
+                      style={{
+                        background: 'radial-gradient(ellipse at center, rgba(255,214,10,0.12) 0%, transparent 70%)',
+                        boxShadow: '0 0 40px -8px rgba(255,214,10,0.3)',
+                      }}
+                    />
+                    <div
+                      className="absolute inset-0 rounded-[18px]"
+                      style={{
+                        background: 'linear-gradient(160deg, rgba(40,30,5,0.6) 0%, rgba(10,10,20,0.7) 100%)',
+                        border: '1.5px solid rgba(255,214,10,0.2)',
+                        backdropFilter: 'blur(4px)',
+                      }}
+                    />
+                    <div
+                      className="absolute inset-0 flex items-start justify-center pointer-events-none"
+                      style={{ zIndex: 1, paddingTop: 8 }}
+                    >
+                      <img
+                        src="/logo.png"
+                        alt=""
+                        style={{ width: 84, height: 84, objectFit: 'contain', opacity: 0.22, filter: 'blur(0.3px) saturate(0.6)' }}
+                      />
+                    </div>
+                    <div className="relative trophy-container" style={{ width: 38, height: 52, zIndex: 2, marginTop: 32 }}>
+                      <TrophySVG glow />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-1" style={{ zIndex: 2 }}>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,214,10,0.6)' }}>
+                      2º Trimestre
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right column */}
+                <div className="flex flex-col gap-3 flex-shrink-0" style={{ width: 115 }}>
+                  {rightCards.map((card, i) => (
+                    <div key={card.unidade.id} ref={mobileRightRefs[i] as React.RefObject<HTMLDivElement>}>
+                      <UnitCard data={card} side="right" compact />
+                    </div>
+                  ))}
+                  {Array.from({ length: Math.max(0, 4 - rightCards.length) }).map((_, i) => (
+                    <div key={`ph-mr-${i}`} className="h-[44px] rounded-[10px]" style={{ border: '1px dashed rgba(255,255,255,0.05)' }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Connector lines mobile */}
+              <Connectors
+                leftCards={leftCards}
+                rightCards={rightCards}
+                leftRefs={mobileLeftRefs as React.RefObject<HTMLDivElement>[]}
+                rightRefs={mobileRightRefs as React.RefObject<HTMLDivElement>[]}
+                trophyRef={mobileTrophyRef}
+                containerRef={mobileContainerRef}
               />
-              <div
-                className="absolute inset-0 rounded-[20px]"
-                style={{
-                  background: 'linear-gradient(160deg, rgba(40,30,5,0.5) 0%, rgba(10,10,20,0.7) 100%)',
-                  border: '1px solid rgba(255,214,10,0.2)',
-                }}
-              />
-              {/* Logo de fundo mobile */}
-              <div
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ zIndex: 1, alignItems: 'flex-start', paddingTop: 10 }}
-              >
-                <img
-                  src="/logo.png"
-                  alt=""
-                  style={{
-                    width: 110,
-                    height: 110,
-                    objectFit: 'contain',
-                    opacity: 0.22,
-                    filter: 'blur(0.3px) saturate(0.6)',
-                  }}
-                />
-              </div>
-              <div className="relative trophy-container" style={{ width: 76, height: 106, zIndex: 2, marginTop: 40 }}>
-                <TrophySVG glow />
-              </div>
-            </div>
-
-            {/* Quarter label mobile */}
-            <span
-              className="text-[10px] font-black uppercase tracking-[0.25em]"
-              style={{ color: 'rgba(255,214,10,0.55)', marginTop: -8 }}
-            >
-              2º Trimestre
-            </span>
-
-            {/* Left + Right side by side */}
-            <div className="w-full grid grid-cols-2 gap-3 max-w-md">
-              {/* Feminine */}
-              <div className="flex flex-col gap-2">
-                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500 text-center mb-1">
-                  Femininas
-                </p>
-                {leftCards.map(card => (
-                  <UnitCard key={card.unidade.id} data={card} side="left" />
-                ))}
-              </div>
-
-              {/* Masculine */}
-              <div className="flex flex-col gap-2">
-                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500 text-center mb-1">
-                  Masculinas
-                </p>
-                {rightCards.map(card => (
-                  <UnitCard key={card.unidade.id} data={card} side="right" />
-                ))}
-              </div>
             </div>
           </div>
 

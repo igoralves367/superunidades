@@ -12,11 +12,11 @@
 - **Cobertura alvo**: 60%
 
 ## Estado
-- **Fase atual**: 4-implementation
+- **Fase atual**: concluída
 - **Spec funcional**: aprovado
 - **Spec técnico**: aprovado
 - **Tasks**: aprovado
-- **Implementação**: 0/7 completas
+- **Implementação**: 7/7 completas
 
 ## Contexto Inicial
 No painel público da unidade (PublicRanking.tsx, CounselorPanel, acessado via ?u=CODE), adicionar seção "Sócios" que:

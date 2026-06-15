@@ -617,46 +617,91 @@ interface SocioCardProps {
   socio: Socio;
   expanded: boolean;
   pago: boolean;
+  mesAtual: string;
   parcelas: PagamentoSocio[];
   onToggle: () => void;
+  onSavePrevisao: (socioId: string, date: string) => Promise<void>;
 }
 
-const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, parcelas, onToggle }) => (
-  <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden">
-    <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
-      <div>
-        <p className="text-sm font-bold text-white">{socio.nome}</p>
-        <p className="text-[11px] text-gray-500 mt-0.5">
-          R$ {socio.valorMensal.toFixed(2)}/mês
-          {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
-        </p>
-      </div>
-      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-        pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
-      }`}>
-        {pago ? 'Pago' : 'Pendente'}
-      </span>
-    </button>
-    {expanded && (
-      <div className="border-t border-white/10 px-4 py-3 space-y-2">
-        {parcelas.length === 0 ? (
-          <p className="text-xs text-gray-600 py-2 text-center">Nenhum pagamento registrado.</p>
-        ) : (
-          parcelas.map(p => (
-            <div key={p.id} className="flex items-center justify-between text-xs">
-              <span className="text-gray-300 font-semibold">{formatMesRef(p.mesReferencia)}</span>
-              <span className="flex items-center gap-3">
-                <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
-                <span className="text-gray-600">{p.dataPagamento}</span>
-                <span className="text-[#34D399] font-black uppercase">Pago</span>
-              </span>
+const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, parcelas, onToggle, onSavePrevisao }) => {
+  const [previsao, setPrevisao] = React.useState(socio.previsaoPagamento ?? '');
+  const [savingPrevisao, setSavingPrevisao] = React.useState(false);
+
+  const handleSavePrevisao = async () => {
+    setSavingPrevisao(true);
+    try { await onSavePrevisao(socio.id, previsao); } finally { setSavingPrevisao(false); }
+  };
+
+  return (
+    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
+        <div>
+          <p className="text-sm font-bold text-white">{socio.nome}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            R$ {socio.valorMensal.toFixed(2)}/mês
+            {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
+          </p>
+        </div>
+        <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+          pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
+        }`}>
+          {pago ? 'Pago' : 'Pendente'}
+        </span>
+      </button>
+      {expanded && (
+        <div className="border-t border-white/10 px-4 py-3 space-y-3">
+          {/* Parcela do mês atual se pendente */}
+          {!pago && (
+            <div className="rounded-xl bg-[#FFD60A]/5 border border-[#FFD60A]/20 px-3 py-2.5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-white font-bold">{formatMesRef(mesAtual)} <span className="text-gray-500 font-normal">(mês atual)</span></span>
+                <span className="text-[#FFD60A] font-black uppercase text-[10px]">Pendente</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <p className="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">Previsão de pagamento</p>
+                  <input
+                    type="date"
+                    value={previsao}
+                    onChange={e => setPrevisao(e.target.value)}
+                    className="w-full bg-[#0B0F1A] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-[#FFD60A]/40"
+                  />
+                </div>
+                <button
+                  onClick={handleSavePrevisao}
+                  disabled={savingPrevisao || !previsao}
+                  className="mt-5 px-3 py-1.5 rounded-lg bg-[#FFD60A]/20 text-[#FFD60A] text-[10px] font-black uppercase hover:bg-[#FFD60A]/30 disabled:opacity-40 transition whitespace-nowrap"
+                >
+                  {savingPrevisao ? '...' : 'Salvar'}
+                </button>
+              </div>
+              {socio.previsaoPagamento && (
+                <p className="text-[10px] text-gray-500">
+                  Previsão registrada: <span className="text-gray-300">{socio.previsaoPagamento}</span>
+                </p>
+              )}
             </div>
-          ))
-        )}
-      </div>
-    )}
-  </div>
-);
+          )}
+          {/* Histórico de pagamentos */}
+          {parcelas.length === 0 && pago ? (
+            <p className="text-xs text-gray-600 py-1 text-center">Nenhum pagamento registrado.</p>
+          ) : (
+            parcelas.map(p => (
+              <div key={p.id} className="flex items-center justify-between text-xs">
+                <span className="text-gray-300 font-semibold">{formatMesRef(p.mesReferencia)}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
+                  <span className="text-gray-600">{p.dataPagamento}</span>
+                  <span className="text-[#34D399] font-black uppercase">Pago</span>
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // CounselorPanel — full panel for ?u=UNITCODE
@@ -689,7 +734,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   const [isSocioModalOpen, setIsSocioModalOpen] = useState(false);
   const [savingSocio, setSavingSocio] = useState(false);
   const [expandedSocioId, setExpandedSocioId] = useState<string | null>(null);
-  const [socioForm, setSocioForm] = useState({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef() });
+  const [socioForm, setSocioForm] = useState({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef(), responsavelId: '' });
 
   useEffect(() => {
     let cancelled = false;
@@ -705,39 +750,20 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
     return () => { cancelled = true; };
   }, [clubId, unit.id]);
 
-  const socioCount = socios.length;
-
   const pagamentosDeSocio = (socioId: string): PagamentoSocio[] =>
     pagamentos
       .filter(p => p.socioId === socioId)
       .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia))
       .slice(0, 6);
 
-  const isMesAtualPago = (socioId: string): boolean => {
-    const mesAtual = getCurrentMesRef();
-    return pagamentos.some(p => p.socioId === socioId && p.mesReferencia === mesAtual);
-  };
+  const mesAtual = getCurrentMesRef();
 
-  const handleCreateSocio = async () => {
-    if (!socioForm.nome.trim() || !socioForm.valorMensal) return;
-    setSavingSocio(true);
-    try {
-      await fs.createSocio(clubId, {
-        nome: socioForm.nome.trim(),
-        valorMensal: parseFloat(socioForm.valorMensal),
-        mesIngresso: socioForm.mesIngresso,
-        unidadeId: unit.id,
-        ativo: true,
-      });
-      const updated = await fs.listSocios(clubId);
-      setSocios(updated.filter(s => s.unidadeId === unit.id && s.ativo));
-      setIsSocioModalOpen(false);
-      setSocioForm({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef() });
-    } catch (err) {
-      console.error('Erro ao criar sócio:', err);
-    } finally {
-      setSavingSocio(false);
-    }
+  const isMesAtualPago = (socioId: string): boolean =>
+    pagamentos.some(p => p.socioId === socioId && p.mesReferencia === mesAtual);
+
+  const handleSavePrevisao = async (socioId: string, date: string) => {
+    await fs.updateSocio(clubId, socioId, { previsaoPagamento: date });
+    setSocios(prev => prev.map(s => s.id === socioId ? { ...s, previsaoPagamento: date } : s));
   };
 
   const sortedQuarters = useMemo(
@@ -768,6 +794,46 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
     () => socios.filter(s => !activeTrimestreRef || s.trimestreRef !== activeTrimestreRef),
     [socios, activeTrimestreRef]
   );
+
+  const handleCreateSocio = async () => {
+    if (!socioForm.nome.trim() || !socioForm.valorMensal) return;
+    setSavingSocio(true);
+    try {
+      await fs.createSocio(clubId, {
+        nome: socioForm.nome.trim(),
+        valorMensal: parseFloat(socioForm.valorMensal),
+        mesIngresso: socioForm.mesIngresso,
+        unidadeId: unit.id,
+        ativo: true,
+        ...(activeTrimestreRef ? { trimestreRef: activeTrimestreRef } : {}),
+        ...(socioForm.responsavelId ? { indicadoPorMembroId: socioForm.responsavelId } : {}),
+      });
+      const updatedSocios = await fs.listSocios(clubId);
+      const unitSocios = updatedSocios.filter(s => s.unidadeId === unit.id && s.ativo);
+      setSocios(unitSocios);
+
+      // Auto-submit requisito "Sócio Desbravador" se houver trimestre ativo
+      if (activeQuarter) {
+        const reqs = requirementsByQuarter[activeQuarter.id] ?? [];
+        const socioReq = reqs.find(r => r.id.includes('socio-desbravador'));
+        if (socioReq) {
+          const novosCount = unitSocios.filter(s => s.trimestreRef === activeTrimestreRef).length;
+          await fs.submitRequirementByCounselor(
+            clubId, activeQuarter.id, unit.id, socioReq.id,
+            { quantity: novosCount, observation: `${novosCount} sócio(s) conquistado(s) este trimestre` },
+            { id: unit.id, nome: unit.nome }
+          ).catch(err => console.error('Erro ao auto-submeter requisito:', err));
+        }
+      }
+
+      setIsSocioModalOpen(false);
+      setSocioForm({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef(), responsavelId: '' });
+    } catch (err) {
+      console.error('Erro ao criar sócio:', err);
+    } finally {
+      setSavingSocio(false);
+    }
+  };
 
   // Indicadores de Progresso — acompanha o trimestre selecionado no seletor
   const progressoIndicadores = useMemo(() => {
@@ -936,7 +1002,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 unitName={unit.nome}
                 requirements={requirements}
                 progressDoc={progressDoc}
-                socioCount={socioCount}
+                socioCount={sociosNovosTrimestre.length}
               />
             ) : (
               <QuarterRequirementsView
@@ -972,7 +1038,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                   Sócios Desbravador
                 </p>
                 <p className="text-sm font-bold text-white mt-0.5">
-                  {socioCount} de {SOCIO_META} conquistados
+                  {sociosNovosTrimestre.length} de {SOCIO_META} conquistados este trimestre
                 </p>
               </div>
               <button
@@ -1010,8 +1076,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                           socio={socio}
                           expanded={expandedSocioId === socio.id}
                           pago={isMesAtualPago(socio.id)}
+                          mesAtual={mesAtual}
                           parcelas={expandedSocioId === socio.id ? pagamentosDeSocio(socio.id) : []}
                           onToggle={() => setExpandedSocioId(expandedSocioId === socio.id ? null : socio.id)}
+                          onSavePrevisao={handleSavePrevisao}
                         />
                       ))}
                     </div>
@@ -1031,8 +1099,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                           socio={socio}
                           expanded={expandedSocioId === socio.id}
                           pago={isMesAtualPago(socio.id)}
+                          mesAtual={mesAtual}
                           parcelas={expandedSocioId === socio.id ? pagamentosDeSocio(socio.id) : []}
                           onToggle={() => setExpandedSocioId(expandedSocioId === socio.id ? null : socio.id)}
+                          onSavePrevisao={handleSavePrevisao}
                         />
                       ))}
                     </div>
@@ -1100,6 +1170,27 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-1.5">
+                  Responsável na Unidade (opcional)
+                </label>
+                <select
+                  value={socioForm.responsavelId}
+                  onChange={e => setSocioForm(f => ({ ...f, responsavelId: e.target.value }))}
+                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                >
+                  <option value="">Não informado</option>
+                  {desbravadores
+                    .filter(d => d.unidadeId === unit.id && d.status === 'ATIVO')
+                    .map(d => <option key={d.id} value={d.id}>{d.nome}</option>)
+                  }
+                </select>
+              </div>
+              {activeTrimestreRef && (
+                <p className="text-[10px] text-gray-500 px-1">
+                  Será registrado como <span className="text-[#FFD60A] font-black">{activeTrimestreRef.replace('-Q', ' — Q')}º Trimestre</span> e enviado automaticamente para aprovação da diretoria.
+                </p>
+              )}
             </div>
 
             <button
@@ -1107,8 +1198,8 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
               disabled={savingSocio || !socioForm.nome.trim() || !socioForm.valorMensal}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#FFD60A] text-black text-sm font-black uppercase tracking-wider hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {savingSocio ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-              Registrar Sócio
+              {savingSocio ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+              Registrar e Enviar para Aprovação
             </button>
           </div>
         </div>

@@ -639,7 +639,9 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
           <p className="text-sm font-bold text-white">{socio.nome}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">
             R$ {socio.valorMensal.toFixed(2)}/mês
-            {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
+            {socio.trimestreRef
+              ? ` · ${socio.trimestreRef.replace(/(\d+)-Q(\d)/, '$1 — Q$2')}`
+              : ' · Pré-existente'}
           </p>
         </div>
         <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
@@ -1090,7 +1092,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 {sociosExistentes.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 px-1">
-                      Pré-existentes — manter ativos ({sociosExistentes.length})
+                      Sócios ativos ({sociosExistentes.length})
                     </p>
                     <div className="space-y-3">
                       {sociosExistentes.map(socio => (

@@ -1,0 +1,133 @@
+{
+  "feature": "socios-painel-unidade",
+  "execution_strategy": "batched",
+  "stats": {
+    "total": 7,
+    "done": 0,
+    "by_layer": { "1": 4, "2": 0, "3": 3 }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Adicionar aba Sócios e estado base no CounselorPanel",
+      "description": "Estender PanelTab com 'socios', adicionar estado (socios, pagamentos, loading, modal, form, expandedSocioId) e o useEffect que carrega listSocios + listPagamentosSocios filtrando por unidadeId === unit.id && ativo. Adicionar botão da aba na barra de navegação com ícone Heart.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": [],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: aba 'Sócios' aparece na barra junto a Trimestres/Membros",
+        "AC-2: dados de sócios da unidade carregam ao montar o painel",
+        "AC-3: apenas sócios com unidadeId === unit.id && ativo são guardados no estado",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-002",
+      "title": "Renderizar lista de sócios com status do mês atual",
+      "description": "Implementar o conteúdo da aba Sócios: cabeçalho com contador 'X de 4', lista de cards com nome, cota, mês ingresso e badge PAGO/PENDENTE do mês atual via helper isMesAtualPago. Incluir estado vazio com CTA.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-001"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: cada sócio exibe nome, cota mensal e mês de ingresso",
+        "AC-2: badge PAGO (verde) / PENDENTE (amarelo) reflete o mês atual",
+        "AC-3: contador mostra total de sócios ativos vs meta 4",
+        "AC-4: estado vazio aparece quando não há sócios",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-003",
+      "title": "Accordion de parcelas por sócio",
+      "description": "Ao clicar no sócio, expandir mostrando últimos 6 meses via helper pagamentosDeSocio. Cada linha exibe mês/ano, status PAGO/PENDENTE, valor e data quando pago. Mais recente primeiro.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-002"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: clicar no card expande/colapsa o detalhe de parcelas",
+        "AC-2: mostra até 6 meses ordenados do mais recente",
+        "AC-3: linhas pagas exibem valor e data do pagamento",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-2"],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-004",
+      "title": "Modal Adicionar Sócio + pré-preenchimento do requisito",
+      "description": "Modal com campos nome, cota mensal, mês ingresso; handleCreateSocio chama fs.createSocio com unidadeId fixo e recarrega a lista. Passar socioCount para ActiveQuarterEditor e pré-preencher quantity dos requisitos *socio-desbravador*.",
+      "status": "pending",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-002"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: modal cria sócio com unidadeId da unidade atual e ativo true",
+        "AC-2: lista e contador atualizam após salvar",
+        "AC-3: campo quantity do requisito Sócio Desbravador abre pré-preenchido com socioCount e permanece editável",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-3", "US-4"],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-005",
+      "title": "Code review",
+      "description": "Revisar a implementação com sdd-code-reviewer: padrões React 19, consistência com o restante de PublicRanking.tsx, ausência de código morto.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003", "TASK-004"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: sem code smells críticos apontados pelo reviewer",
+        "AC-2: padrões do projeto seguidos"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-006",
+      "title": "Performance review",
+      "description": "Verificar que listSocios/listPagamentosSocios rodam uma vez por montagem, sem re-fetch em troca de aba, e que filtros/memos não causam re-renders desnecessários.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003", "TASK-004"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: leituras Firestore não disparam ao alternar abas",
+        "AC-2: derivações usam useMemo/helpers sem custo redundante"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-007",
+      "title": "Security review",
+      "description": "Confirmar isolamento por unidade (unidadeId === unit.id), clubeId vindo da URL, sem secrets hardcoded e que criação de sócio sempre fixa unidadeId.",
+      "status": "pending",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-003", "TASK-004"],
+      "files": ["pages/PublicRanking.tsx"],
+      "acceptance_criteria": [
+        "AC-1: nenhuma unidade vê sócios de outra",
+        "AC-2: createSocio sempre grava unidadeId da unidade atual",
+        "AC-3: nenhum secret exposto"
+      ],
+      "references": [],
+      "design_decisions": []
+    }
+  ]
+}

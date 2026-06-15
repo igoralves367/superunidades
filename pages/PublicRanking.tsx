@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, CalendarCheck, CheckCircle2, Circle, Clock, Edit2,
-  ExternalLink, Loader2, Lock, Save, Send, Snowflake, Users, X, XCircle, Zap
+  ExternalLink, Heart, Loader2, Lock, Plus, Save, Send, Snowflake, Users, X, XCircle, Zap
 } from 'lucide-react';
 import { LoadingScreen } from '../components/LoadingScreen';
 import * as fs from '../services/firestoreDb';
 import {
-  Classe, Clube, Desbravador, RankingProgressEntry, RankingQuarter,
-  RankingRequirement, RankingUnitProgressDoc, Reuniao, ReuniaoPresenca, Unidade
+  Classe, Clube, Desbravador, PagamentoSocio, RankingProgressEntry, RankingQuarter,
+  RankingRequirement, RankingUnitProgressDoc, Reuniao, ReuniaoPresenca, Socio, Unidade
 } from '../types';
 import { calculateRequirementBreakdown, generateUnitCode } from '../services/ranking';
 import { computeEngagementRows } from '../services/engagement';
@@ -46,6 +46,20 @@ const isRequirementDone = (result?: RankingUnitProgressDoc['resultados'][string]
   if (!result) return false;
   return (result.calculatedPoints ?? 0) > 0 || !!result.completed;
 };
+
+const getCurrentMesRef = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const formatMesRef = (mesRef: string) => {
+  const [year, month] = mesRef.split('-');
+  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const idx = Number(month) - 1;
+  return `${meses[idx] ?? month}/${year}`;
+};
+
+const SOCIO_META = 4;
 
 // Aggregate class progress by unit for engagement signals
 const aggregateClassProgress = async (
@@ -406,6 +420,7 @@ interface ActiveQuarterEditorProps {
   unitName: string;
   requirements: RankingRequirement[];
   progressDoc?: RankingUnitProgressDoc;
+  socioCount?: number;
 }
 
 const SUBMISSION_STATUS_BADGE: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
@@ -416,7 +431,7 @@ const SUBMISSION_STATUS_BADGE: Record<string, { label: string; className: string
 };
 
 const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
-  clubId, quarter, unitId, unitName, requirements, progressDoc
+  clubId, quarter, unitId, unitName, requirements, progressDoc, socioCount
 }) => {
   const [resultados, setResultados] = useState<Record<string, RankingProgressEntry>>(
     () => progressDoc?.resultados ?? {}
@@ -434,9 +449,13 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
 
   const getDraft = (req: RankingRequirement) => {
     const entry = resultados[req.id];
+    const isSocioReq = req.requiresQuantity && req.id.includes('socio-desbravador');
+    const defaultQuantity = entry?.quantity != null
+      ? String(entry.quantity)
+      : (isSocioReq && socioCount != null ? String(socioCount) : '');
     return drafts[req.id] ?? {
       observation: entry?.submission?.observation ?? '',
-      quantity: entry?.quantity != null ? String(entry.quantity) : ''
+      quantity: defaultQuantity
     };
   };
 
@@ -594,7 +613,7 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
 // ---------------------------------------------------------------------------
 // CounselorPanel — full panel for ?u=UNITCODE
 // ---------------------------------------------------------------------------
-type PanelTab = 'trimestres' | 'membros';
+type PanelTab = 'trimestres' | 'membros' | 'socios';
 
 interface CounselorPanelProps {
   clubId: string;
@@ -614,6 +633,65 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   desbravadores, reunioes, presencas, classes, publicSlug
 }) => {
   const [activeTab, setActiveTab] = useState<PanelTab>('trimestres');
+
+  // Sócios da unidade
+  const [socios, setSocios] = useState<Socio[]>([]);
+  const [pagamentos, setPagamentos] = useState<PagamentoSocio[]>([]);
+  const [sociosLoading, setSociosLoading] = useState(false);
+  const [isSocioModalOpen, setIsSocioModalOpen] = useState(false);
+  const [savingSocio, setSavingSocio] = useState(false);
+  const [expandedSocioId, setExpandedSocioId] = useState<string | null>(null);
+  const [socioForm, setSocioForm] = useState({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef() });
+
+  useEffect(() => {
+    let cancelled = false;
+    setSociosLoading(true);
+    Promise.all([fs.listSocios(clubId), fs.listPagamentosSocios(clubId)])
+      .then(([allSocios, allPagamentos]) => {
+        if (cancelled) return;
+        setSocios(allSocios.filter(s => s.unidadeId === unit.id && s.ativo));
+        setPagamentos(allPagamentos);
+        setSociosLoading(false);
+      })
+      .catch(() => { if (!cancelled) setSociosLoading(false); });
+    return () => { cancelled = true; };
+  }, [clubId, unit.id]);
+
+  const socioCount = socios.length;
+
+  const pagamentosDeSocio = (socioId: string): PagamentoSocio[] =>
+    pagamentos
+      .filter(p => p.socioId === socioId)
+      .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia))
+      .slice(0, 6);
+
+  const isMesAtualPago = (socioId: string): boolean => {
+    const mesAtual = getCurrentMesRef();
+    return pagamentos.some(p => p.socioId === socioId && p.mesReferencia === mesAtual);
+  };
+
+  const handleCreateSocio = async () => {
+    if (!socioForm.nome.trim() || !socioForm.valorMensal) return;
+    setSavingSocio(true);
+    try {
+      await fs.createSocio(clubId, {
+        nome: socioForm.nome.trim(),
+        valorMensal: parseFloat(socioForm.valorMensal),
+        mesIngresso: socioForm.mesIngresso,
+        unidadeId: unit.id,
+        ativo: true,
+      });
+      const updated = await fs.listSocios(clubId);
+      setSocios(updated.filter(s => s.unidadeId === unit.id && s.ativo));
+      setIsSocioModalOpen(false);
+      setSocioForm({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef() });
+    } catch (err) {
+      console.error('Erro ao criar sócio:', err);
+    } finally {
+      setSavingSocio(false);
+    }
+  };
+
   const sortedQuarters = useMemo(
     () => [...quarters].sort((a, b) => a.ordem - b.ordem),
     [quarters]
@@ -757,6 +835,17 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
             <Users size={14} />
             Membros
           </button>
+          <button
+            onClick={() => setActiveTab('socios')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+              activeTab === 'socios'
+                ? 'bg-[#111827] text-white border border-white/10'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <Heart size={14} />
+            Sócios
+          </button>
         </div>
 
         {/* Tab: Trimestres */}
@@ -784,6 +873,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 unitName={unit.nome}
                 requirements={requirements}
                 progressDoc={progressDoc}
+                socioCount={socioCount}
               />
             ) : (
               <QuarterRequirementsView
@@ -810,10 +900,162 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
           />
         )}
 
+        {/* Tab: Sócios */}
+        {activeTab === 'socios' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">
+                  Sócios Desbravador
+                </p>
+                <p className="text-sm font-bold text-white mt-0.5">
+                  {socioCount} de {SOCIO_META} conquistados
+                </p>
+              </div>
+              <button
+                onClick={() => setIsSocioModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFD60A] text-black text-xs font-black uppercase tracking-wider hover:brightness-110 transition"
+              >
+                <Plus size={14} /> Adicionar
+              </button>
+            </div>
+
+            {sociosLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="animate-spin text-gray-500" size={24} />
+              </div>
+            ) : socios.length === 0 ? (
+              <div className="rounded-[20px] border border-dashed border-white/15 bg-white/[0.02] py-10 px-4 text-center space-y-2">
+                <Heart className="mx-auto text-gray-600" size={28} />
+                <p className="text-sm text-gray-400 font-semibold">Nenhum sócio cadastrado</p>
+                <p className="text-xs text-gray-600">Adicione sócios para somar pontos no Clubão.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {socios.map(socio => {
+                  const pago = isMesAtualPago(socio.id);
+                  const expanded = expandedSocioId === socio.id;
+                  const parcelas = expanded ? pagamentosDeSocio(socio.id) : [];
+                  return (
+                    <div
+                      key={socio.id}
+                      className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden"
+                    >
+                      <button
+                        onClick={() => setExpandedSocioId(expanded ? null : socio.id)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-bold text-white">{socio.nome}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            R$ {socio.valorMensal.toFixed(2)}/mês
+                            {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                            pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
+                          }`}
+                        >
+                          {pago ? 'Pago' : 'Pendente'}
+                        </span>
+                      </button>
+                      {expanded && (
+                        <div className="border-t border-white/10 px-4 py-3 space-y-2">
+                          {parcelas.length === 0 ? (
+                            <p className="text-xs text-gray-600 py-2 text-center">Nenhum pagamento registrado.</p>
+                          ) : (
+                            parcelas.map(p => (
+                              <div key={p.id} className="flex items-center justify-between text-xs">
+                                <span className="text-gray-300 font-semibold">{formatMesRef(p.mesReferencia)}</span>
+                                <span className="flex items-center gap-3">
+                                  <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
+                                  <span className="text-gray-600">{p.dataPagamento}</span>
+                                  <span className="text-[#34D399] font-black uppercase">Pago</span>
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <p className="text-center text-[10px] uppercase tracking-[0.3em] font-black text-gray-700 pb-6">
           Super Unidades — Painel individual
         </p>
       </div>
+
+      {isSocioModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setIsSocioModalOpen(false)}>
+          <div
+            className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#0B0F1A] p-6 space-y-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black text-white">Novo Sócio</h2>
+              <button onClick={() => setIsSocioModalOpen(false)} className="text-gray-500 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-1.5">
+                  Nome do Patrocinador
+                </label>
+                <input
+                  type="text"
+                  value={socioForm.nome}
+                  onChange={e => setSocioForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Irmão Silva"
+                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-1.5">
+                    Cota Mensal (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={socioForm.valorMensal}
+                    onChange={e => setSocioForm(f => ({ ...f, valorMensal: e.target.value }))}
+                    placeholder="50.00"
+                    className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mb-1.5">
+                    Mês de Ingresso
+                  </label>
+                  <input
+                    type="month"
+                    value={socioForm.mesIngresso}
+                    onChange={e => setSocioForm(f => ({ ...f, mesIngresso: e.target.value }))}
+                    className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreateSocio}
+              disabled={savingSocio || !socioForm.nome.trim() || !socioForm.valorMensal}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#FFD60A] text-black text-sm font-black uppercase tracking-wider hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingSocio ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+              Registrar Sócio
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

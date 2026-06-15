@@ -611,6 +611,54 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
 };
 
 // ---------------------------------------------------------------------------
+// SocioCard — card individual de sócio com accordion de parcelas
+// ---------------------------------------------------------------------------
+interface SocioCardProps {
+  socio: Socio;
+  expanded: boolean;
+  pago: boolean;
+  parcelas: PagamentoSocio[];
+  onToggle: () => void;
+}
+
+const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, parcelas, onToggle }) => (
+  <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden">
+    <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
+      <div>
+        <p className="text-sm font-bold text-white">{socio.nome}</p>
+        <p className="text-[11px] text-gray-500 mt-0.5">
+          R$ {socio.valorMensal.toFixed(2)}/mês
+          {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
+        </p>
+      </div>
+      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+        pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
+      }`}>
+        {pago ? 'Pago' : 'Pendente'}
+      </span>
+    </button>
+    {expanded && (
+      <div className="border-t border-white/10 px-4 py-3 space-y-2">
+        {parcelas.length === 0 ? (
+          <p className="text-xs text-gray-600 py-2 text-center">Nenhum pagamento registrado.</p>
+        ) : (
+          parcelas.map(p => (
+            <div key={p.id} className="flex items-center justify-between text-xs">
+              <span className="text-gray-300 font-semibold">{formatMesRef(p.mesReferencia)}</span>
+              <span className="flex items-center gap-3">
+                <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
+                <span className="text-gray-600">{p.dataPagamento}</span>
+                <span className="text-[#34D399] font-black uppercase">Pago</span>
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    )}
+  </div>
+);
+
+// ---------------------------------------------------------------------------
 // CounselorPanel — full panel for ?u=UNITCODE
 // ---------------------------------------------------------------------------
 type PanelTab = 'trimestres' | 'membros' | 'socios';
@@ -705,6 +753,25 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   const selectedQuarter = sortedQuarters.find(q => q.id === selectedQuarterId) || null;
   const requirements = requirementsByQuarter[selectedQuarterId] || [];
   const progressDoc = progressByQuarter[selectedQuarterId];
+
+  // Classificação de sócios por trimestre ativo
+  const activeQuarterMonths = useMemo(() => {
+    if (!activeQuarter) return new Set<string>();
+    const start = (activeQuarter.number - 1) * 3 + 1;
+    return new Set([start, start + 1, start + 2].map(m =>
+      `${activeQuarter.year}-${String(m).padStart(2, '0')}`
+    ));
+  }, [activeQuarter]);
+
+  const sociosNovosTrimestre = useMemo(
+    () => socios.filter(s => s.mesIngresso && activeQuarterMonths.has(s.mesIngresso)),
+    [socios, activeQuarterMonths]
+  );
+
+  const sociosExistentes = useMemo(
+    () => socios.filter(s => !s.mesIngresso || !activeQuarterMonths.has(s.mesIngresso)),
+    [socios, activeQuarterMonths]
+  );
 
   // Indicadores de Progresso — acompanha o trimestre selecionado no seletor
   const progressoIndicadores = useMemo(() => {
@@ -931,56 +998,50 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 <p className="text-xs text-gray-600">Adicione sócios para somar pontos no Clubão.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {socios.map(socio => {
-                  const pago = isMesAtualPago(socio.id);
-                  const expanded = expandedSocioId === socio.id;
-                  const parcelas = expanded ? pagamentosDeSocio(socio.id) : [];
-                  return (
-                    <div
-                      key={socio.id}
-                      className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden"
-                    >
-                      <button
-                        onClick={() => setExpandedSocioId(expanded ? null : socio.id)}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left"
-                      >
-                        <div>
-                          <p className="text-sm font-bold text-white">{socio.nome}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">
-                            R$ {socio.valorMensal.toFixed(2)}/mês
-                            {socio.mesIngresso ? ` · desde ${formatMesRef(socio.mesIngresso)}` : ''}
-                          </p>
-                        </div>
-                        <span
-                          className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                            pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
-                          }`}
-                        >
-                          {pago ? 'Pago' : 'Pendente'}
-                        </span>
-                      </button>
-                      {expanded && (
-                        <div className="border-t border-white/10 px-4 py-3 space-y-2">
-                          {parcelas.length === 0 ? (
-                            <p className="text-xs text-gray-600 py-2 text-center">Nenhum pagamento registrado.</p>
-                          ) : (
-                            parcelas.map(p => (
-                              <div key={p.id} className="flex items-center justify-between text-xs">
-                                <span className="text-gray-300 font-semibold">{formatMesRef(p.mesReferencia)}</span>
-                                <span className="flex items-center gap-3">
-                                  <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
-                                  <span className="text-gray-600">{p.dataPagamento}</span>
-                                  <span className="text-[#34D399] font-black uppercase">Pago</span>
-                                </span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
+              <div className="space-y-5">
+                {/* Sócios novos deste trimestre */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#34D399] px-1">
+                    Novos este trimestre ({sociosNovosTrimestre.length})
+                  </p>
+                  {sociosNovosTrimestre.length === 0 ? (
+                    <p className="text-xs text-gray-600 px-1">Nenhum sócio conquistado neste trimestre ainda.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {sociosNovosTrimestre.map(socio => (
+                        <SocioCard
+                          key={socio.id}
+                          socio={socio}
+                          expanded={expandedSocioId === socio.id}
+                          pago={isMesAtualPago(socio.id)}
+                          parcelas={expandedSocioId === socio.id ? pagamentosDeSocio(socio.id) : []}
+                          onToggle={() => setExpandedSocioId(expandedSocioId === socio.id ? null : socio.id)}
+                        />
+                      ))}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+
+                {/* Sócios pré-existentes (trimestres anteriores) */}
+                {sociosExistentes.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 px-1">
+                      Pré-existentes — manter ativos ({sociosExistentes.length})
+                    </p>
+                    <div className="space-y-3">
+                      {sociosExistentes.map(socio => (
+                        <SocioCard
+                          key={socio.id}
+                          socio={socio}
+                          expanded={expandedSocioId === socio.id}
+                          pago={isMesAtualPago(socio.id)}
+                          parcelas={expandedSocioId === socio.id ? pagamentosDeSocio(socio.id) : []}
+                          onToggle={() => setExpandedSocioId(expandedSocioId === socio.id ? null : socio.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

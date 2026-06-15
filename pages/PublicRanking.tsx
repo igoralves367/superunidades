@@ -1054,27 +1054,8 @@ export const PublicRanking: React.FC = () => {
     };
 
     load();
-    const intervalId = window.setInterval(async () => {
-      const resolvedClubId = await resolveClubId();
-      if (!resolvedClubId || cancelled) return;
-      try {
-        const [fetchedQuarters, fetchedPresencas] = await Promise.all([
-          fs.listRankingQuarters(resolvedClubId),
-          fs.listReuniaoPresencas(resolvedClubId),
-        ]);
-        const activeQuarter = fetchedQuarters.find((q: { status: string }) => q.status === 'ACTIVE') || null;
-        const fetchedProgress = activeQuarter
-          ? await fs.listRankingProgress(resolvedClubId, activeQuarter.id)
-          : [];
-        if (!cancelled) {
-          setQuarters(fetchedQuarters);
-          setPresencas(fetchedPresencas);
-          setActiveProgressDocs(fetchedProgress);
-        }
-      } catch { /* mantém estado anterior */ }
-    }, 15000);
 
-    return () => { cancelled = true; window.clearInterval(intervalId); };
+    return () => { cancelled = true; };
   }, [routeValue]);
 
   // Load per-quarter data when counselor panel opens

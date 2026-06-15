@@ -1037,17 +1037,20 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
             <div className="flex items-center justify-between px-1">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">
-                  Sócios Desbravador
+                  Sócios Desbravador · Clubão
                 </p>
                 <p className="text-sm font-bold text-white mt-0.5">
-                  {sociosNovosTrimestre.length} de {SOCIO_META} conquistados este trimestre
+                  {sociosNovosTrimestre.length} de {SOCIO_META} novos este trimestre
+                </p>
+                <p className="text-[10px] text-gray-600 mt-0.5">
+                  Meta: recrutar {SOCIO_META} sócios no trimestre atual
                 </p>
               </div>
               <button
                 onClick={() => setIsSocioModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFD60A] text-black text-xs font-black uppercase tracking-wider hover:brightness-110 transition"
               >
-                <Plus size={14} /> Adicionar
+                <Plus size={14} /> Novo Sócio
               </button>
             </div>
 
@@ -1063,14 +1066,12 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
               </div>
             ) : (
               <div className="space-y-5">
-                {/* Sócios novos deste trimestre */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#34D399] px-1">
-                    Novos este trimestre ({sociosNovosTrimestre.length})
-                  </p>
-                  {sociosNovosTrimestre.length === 0 ? (
-                    <p className="text-xs text-gray-600 px-1">Nenhum sócio conquistado neste trimestre ainda.</p>
-                  ) : (
+                {/* Sócios novos deste trimestre — só exibe a seção se houver */}
+                {sociosNovosTrimestre.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#34D399] px-1">
+                      Recrutados este trimestre ({sociosNovosTrimestre.length})
+                    </p>
                     <div className="space-y-3">
                       {sociosNovosTrimestre.map(socio => (
                         <SocioCard
@@ -1085,8 +1086,8 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                         />
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Sócios pré-existentes (trimestres anteriores) */}
                 {sociosExistentes.length > 0 && (

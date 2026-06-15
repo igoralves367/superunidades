@@ -640,7 +640,7 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
           <p className="text-[11px] text-gray-500 mt-0.5">
             R$ {socio.valorMensal.toFixed(2)}/mês
             {socio.trimestreRef
-              ? ` · ${socio.trimestreRef.replace(/(\d+)-Q(\d)/, '$1 — Q$2')}`
+              ? ` · Trimestre ${socio.trimestreRef.replace(/\d+-Q(\d)/, '$1')}`
               : ' · Pré-existente'}
           </p>
         </div>

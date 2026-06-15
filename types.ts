@@ -223,7 +223,7 @@ export interface Parcela {
 
 export interface Despesa { id: string; clubeId: string; valor: number; descricao: string; data: string; categoria?: string; unidadeId?: string; campanhaId?: string; }
 export interface Doacao { id: string; clubeId: string; valor: number; doador: string; data: string; socioId?: string; referenciaMes?: string; tipo?: string; observacao?: string; unidadeId?: string; }
-export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; mesIngresso?: string; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; indicadoPorMembroId?: string; }
+export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; mesIngresso?: string; trimestreRef?: string; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; indicadoPorMembroId?: string; }
 export interface PagamentoSocio { id: string; clubeId: string; socioId: string; dataPagamento: string; valorPago: number; mesReferencia: string; observacao?: string; }
 
 export interface CampanhaVenda {

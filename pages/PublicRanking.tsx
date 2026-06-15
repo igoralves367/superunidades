@@ -754,23 +754,19 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   const requirements = requirementsByQuarter[selectedQuarterId] || [];
   const progressDoc = progressByQuarter[selectedQuarterId];
 
-  // Classificação de sócios por trimestre ativo
-  const activeQuarterMonths = useMemo(() => {
-    if (!activeQuarter) return new Set<string>();
-    const start = (activeQuarter.number - 1) * 3 + 1;
-    return new Set([start, start + 1, start + 2].map(m =>
-      `${activeQuarter.year}-${String(m).padStart(2, '0')}`
-    ));
-  }, [activeQuarter]);
+  // Classificação de sócios por trimestre ativo (baseado em trimestreRef definido pela diretoria)
+  const activeTrimestreRef = activeQuarter
+    ? `${activeQuarter.year}-Q${activeQuarter.number}`
+    : null;
 
   const sociosNovosTrimestre = useMemo(
-    () => socios.filter(s => s.mesIngresso && activeQuarterMonths.has(s.mesIngresso)),
-    [socios, activeQuarterMonths]
+    () => socios.filter(s => activeTrimestreRef && s.trimestreRef === activeTrimestreRef),
+    [socios, activeTrimestreRef]
   );
 
   const sociosExistentes = useMemo(
-    () => socios.filter(s => !s.mesIngresso || !activeQuarterMonths.has(s.mesIngresso)),
-    [socios, activeQuarterMonths]
+    () => socios.filter(s => !activeTrimestreRef || s.trimestreRef !== activeTrimestreRef),
+    [socios, activeTrimestreRef]
   );
 
   // Indicadores de Progresso — acompanha o trimestre selecionado no seletor

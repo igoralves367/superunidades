@@ -1,46 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, Play, PlusCircle, Save, Trash2, Trophy } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Copy, EyeOff, Eye, Link2, Loader2, Play, PlusCircle, Trophy, Zap, Snowflake, RotateCcw } from 'lucide-react';
 import { LoadingScreen } from '../components/LoadingScreen';
-import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingProgressEntry, RankingUnitProgressDoc, VarAccessLogEntry } from '../types';
+import { Usuario, Unidade, RankingQuarter, RankingRequirement, RankingUnitProgressDoc, VarAccessLogEntry } from '../types';
 import * as fs from '../services/firestoreDb';
-import {
-  buildRankingProgressState,
-  buildRankingRows,
-  calculateRequirementBreakdown,
-  calculateRankingTotals,
-  generateUnitCode,
-  getRequirementRuleLabel
-} from '../services/ranking';
+import { buildRankingRows, generateUnitCode } from '../services/ranking';
 import { useToast } from '../store/ToastContext';
 
 interface RankingProps {
   user: Usuario;
 }
-
-type ProgressState = Record<string, RankingProgressEntry>;
-type NewRequirementForm = {
-  category: string;
-  name: string;
-  description: string;
-  points: number;
-};
-
-const defaultNewRequirementForm = (): NewRequirementForm => ({
-  category: 'Requisitos extras',
-  name: '',
-  description: '',
-  points: 100
-});
-
-const groupRequirements = (requirements: RankingRequirement[]) => {
-  const map = new Map<string, RankingRequirement[]>();
-  requirements.forEach(requirement => {
-    const list = map.get(requirement.category) || [];
-    list.push(requirement);
-    map.set(requirement.category, list);
-  });
-  return [...map.entries()];
-};
 
 const buildPublicLink = (clubId: string) =>
   `${window.location.origin}${window.location.pathname}#ranking/${encodeURIComponent(clubId)}`;
@@ -50,31 +18,10 @@ const buildUnitPublicLink = (clubSlugOrId: string, unitId: string) => {
   return `${window.location.origin}${window.location.pathname}#ranking/${encodeURIComponent(clubSlugOrId)}?u=${unitCode}`;
 };
 
-const allowsCompletionToggle = (requirement: RankingRequirement) =>
-  requirement.ruleType === 'BOOLEAN' ||
-  requirement.ruleType === 'BOOLEAN_WITH_BONUS' ||
-  requirement.ruleType === 'BOOLEAN_WITH_PENALTY';
-
-const supportsManualScore = (requirement: RankingRequirement) => requirement.ruleType === 'MANUAL_SCORE';
-
-const bonusInputLabel = (requirement: RankingRequirement) => {
-  if (!requirement.allowBonus) return '';
-  if (requirement.bonusType === 'PER_UNIT') return 'Qtd. bônus';
-  return 'Bônus';
-};
-
-const penaltyInputLabel = (requirement: RankingRequirement) => {
-  if (!requirement.allowPenalty) return '';
-  if (requirement.penaltyType === 'PER_UNIT') return 'Qtd. penalidade';
-  if (requirement.penaltyType === 'MANUAL') return 'Penalidade';
-  return 'Aplicar penalidade';
-};
-
 export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const clubId = user.clubeId;
-  const { success: toastSuccess, error: toastError, warning: toastWarning, info: toastInfo } = useToast();
+  const { error: toastError } = useToast();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedUnitId, setCopiedUnitId] = useState<string | null>(null);
   const [togglingMode, setTogglingMode] = useState(false);
@@ -83,17 +30,14 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
   const [requirements, setRequirements] = useState<RankingRequirement[]>([]);
   const [progressDocs, setProgressDocs] = useState<RankingUnitProgressDoc[]>([]);
   const [selectedQuarterId, setSelectedQuarterId] = useState('');
-  const [selectedUnitId, setSelectedUnitId] = useState('');
-  const [state, setState] = useState<ProgressState>({});
   const [closingQuarter, setClosingQuarter] = useState(false);
   const [copiedVar, setCopiedVar] = useState(false);
   const [varConfig, setVarConfig] = useState<{ accessCount: number; mobile?: number; desktop?: number; tablet?: number; log?: VarAccessLogEntry[] } | null>(null);
   const [showVarLog, setShowVarLog] = useState(false);
   const [regeneratingVar, setRegeneratingVar] = useState(false);
   const [publicSlug, setPublicSlug] = useState('');
-  const [savingRequirement, setSavingRequirement] = useState(false);
-  const [newRequirementForm, setNewRequirementForm] = useState<NewRequirementForm>(defaultNewRequirementForm());
   const [creatingQuarter, setCreatingQuarter] = useState(false);
+  const [updatingMovimentoId, setUpdatingMovimentoId] = useState<string | null>(null);
 
   const loadBase = async () => {
     if (!clubId) return;
@@ -111,7 +55,6 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
 
       const activeQuarter = fetchedQuarters.find(quarter => quarter.status === 'ACTIVE') || fetchedQuarters[0];
       if (activeQuarter && !selectedQuarterId) setSelectedQuarterId(activeQuarter.id);
-      if (eligibleUnits[0] && !selectedUnitId) setSelectedUnitId(eligibleUnits[0].id);
     } finally {
       setLoading(false);
     }
@@ -142,59 +85,21 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
     }
   }, [clubId, selectedQuarterId]);
 
-  const currentDoc = useMemo(
-    () => progressDocs.find(doc => doc.quarterId === selectedQuarterId && doc.unitId === selectedUnitId),
-    [progressDocs, selectedQuarterId, selectedUnitId]
-  );
-
-  useEffect(() => {
-    setState(buildRankingProgressState(requirements, currentDoc?.resultados));
-  }, [requirements, currentDoc]);
-
   const ranking = useMemo(() => buildRankingRows(units, requirements, progressDocs), [units, requirements, progressDocs]);
-  const selectedUnit = useMemo(() => units.find(unit => unit.id === selectedUnitId) || null, [units, selectedUnitId]);
   const selectedQuarter = useMemo(() => quarters.find(quarter => quarter.id === selectedQuarterId) || null, [quarters, selectedQuarterId]);
-  const groupedRequirements = useMemo(() => groupRequirements(requirements), [requirements]);
-  const totals = useMemo(() => calculateRankingTotals(requirements, state), [requirements, state]);
 
   const publicMode = (selectedQuarter?.publicMode ?? 'FULL') as 'FULL' | 'RESTRICTED';
 
-  const handleChange = (requirement: RankingRequirement, patch: Partial<RankingProgressEntry>) => {
-    setState(prev => {
-      const nextRow = {
-        ...prev[requirement.id],
-        ...patch
-      } as RankingProgressEntry;
-      const breakdown = calculateRequirementBreakdown(requirement, nextRow);
-
-      return {
-        ...prev,
-        [requirement.id]: {
-          ...nextRow,
-          basePoints: breakdown.basePoints,
-          bonusPoints: breakdown.bonusPoints,
-          penaltyPoints: breakdown.penaltyPoints,
-          calculatedPoints: breakdown.calculatedPoints
-        }
-      };
-    });
-  };
-
-  const handleSave = async () => {
-    if (!clubId || !selectedQuarterId || !selectedUnitId) return;
-    setSaving(true);
+  const handleToggleMovimento = async (unit: Unidade, value: boolean | null) => {
+    setUpdatingMovimentoId(unit.id);
     try {
-      await fs.saveRankingUnitProgress(clubId, selectedQuarterId, selectedUnitId, state, {
-        id: user.id,
-        nome: user.nome,
-        email: user.email
-      });
-      await loadQuarterData(selectedQuarterId);
+      await fs.updateUnidade(clubId, unit.id, { manualMovimentoSemana: value });
+      setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, manualMovimentoSemana: value } : u));
     } catch (error) {
       console.error(error);
-      toastError('Erro ao salvar progresso do ranking.');
+      toastError('Erro ao atualizar movimentação da unidade.');
     } finally {
-      setSaving(false);
+      setUpdatingMovimentoId(null);
     }
   };
 
@@ -348,75 +253,6 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       alert('Erro ao alterar modo do ranking público.');
     } finally {
       setTogglingMode(false);
-    }
-  };
-
-  const handleCreateRequirement = async () => {
-    if (!clubId || !selectedQuarterId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
-    const name = newRequirementForm.name.trim();
-    const category = newRequirementForm.category.trim() || 'Requisitos extras';
-    const description = newRequirementForm.description.trim();
-    const points = Math.max(0, Number(newRequirementForm.points) || 0);
-
-    if (!name) {
-      alert('Informe o texto do requisito.');
-      return;
-    }
-
-    setSavingRequirement(true);
-    try {
-      const nextDisplayOrder = requirements.reduce((max, current) => Math.max(max, Number(current.displayOrder || 0)), 0) + 1;
-      await fs.createRankingRequirement(clubId, {
-        quarterId: selectedQuarterId,
-        category,
-        name,
-        description,
-        points,
-        ruleType: 'BOOLEAN',
-        requiresQuantity: false,
-        quantityLabel: null,
-        pointsPerUnit: null,
-        maxQuantity: null,
-        allowBonus: false,
-        bonusType: null,
-        bonusValue: null,
-        bonusDescription: null,
-        allowPenalty: false,
-        penaltyType: null,
-        penaltyValue: null,
-        penaltyDescription: null,
-        maxManualScore: null,
-        displayOrder: nextDisplayOrder
-      });
-
-      setNewRequirementForm(defaultNewRequirementForm());
-      await loadQuarterData(selectedQuarterId);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao adicionar requisito.');
-    } finally {
-      setSavingRequirement(false);
-    }
-  };
-
-  const handleDeleteRequirement = async (requirement: RankingRequirement) => {
-    if (!clubId || !selectedQuarterId || !selectedQuarter || selectedQuarter.status === 'CLOSED') return;
-    if (requirement.origem !== 'CUSTOM') {
-      alert('Somente requisitos adicionados manualmente podem ser removidos.');
-      return;
-    }
-
-    if (!window.confirm(`Remover o requisito "${requirement.name}" deste trimestre?`)) return;
-
-    setSavingRequirement(true);
-    try {
-      await fs.deactivateRankingRequirement(clubId, requirement.id);
-      await loadQuarterData(selectedQuarterId);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao remover requisito.');
-    } finally {
-      setSavingRequirement(false);
     }
   };
 
@@ -578,72 +414,34 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
       )}
       */}
 
-      <section className="grid grid-cols-1 xl:grid-cols-[360px,1fr] gap-6">
-        <aside className="space-y-4">
-          <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5 space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Trimestre</label>
-                <select
-                  value={selectedQuarterId}
-                  onChange={e => setSelectedQuarterId(e.target.value)}
-                  className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-4 text-sm font-bold appearance-none outline-none"
-                >
-                  {quarters.map(quarter => (
-                    <option key={quarter.id} value={quarter.id}>{quarter.name} {quarter.year}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Unidade</label>
-                <select
-                  value={selectedUnitId}
-                  onChange={e => setSelectedUnitId(e.target.value)}
-                  className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-4 text-sm font-bold appearance-none outline-none"
-                >
-                  {units.map(unit => (
-                    <option key={unit.id} value={unit.id}>{unit.nome}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total</p>
-                <p className="text-2xl font-black text-white mt-2">{totals.total}</p>
-              </div>
-              <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Status</p>
-                <p className="text-sm font-black text-white mt-3">{selectedQuarter?.status === 'CLOSED' ? 'Encerrado' : 'Em andamento'}</p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={saving || !selectedUnitId || !selectedQuarterId}
-              className="w-full py-4 rounded-2xl bg-[#E53935] text-white text-sm font-black uppercase tracking-[0.2em] disabled:opacity-60 flex items-center justify-center gap-2"
+      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5 space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Trimestre</label>
+            <select
+              value={selectedQuarterId}
+              onChange={e => setSelectedQuarterId(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-4 text-sm font-bold appearance-none outline-none"
             >
-              {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar unidade
-            </button>
+              {quarters.map(quarter => (
+                <option key={quarter.id} value={quarter.id}>{quarter.name} {quarter.year}</option>
+              ))}
+            </select>
           </div>
 
-          <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Trophy size={16} className="text-[#FFD60A]" />
-              <h2 className="font-black uppercase text-xs tracking-widest text-gray-300">Preview do ranking</h2>
-            </div>
-            <div className="space-y-3">
-              {ranking.map((row, index) => (
-                <button
-                  key={row.unidade.id}
-                  onClick={() => setSelectedUnitId(row.unidade.id)}
-                  className={`w-full text-left rounded-2xl border p-4 transition-all ${
-                    row.unidade.id === selectedUnitId
-                      ? 'border-[#E53935]/60 bg-[#0B0F1A]'
-                      : 'border-[#1F2937] bg-[#0B0F1A]/60'
-                  }`}
-                >
+          <div className="flex items-center gap-2 mb-1 pt-2">
+            <Trophy size={16} className="text-[#FFD60A]" />
+            <h2 className="font-black uppercase text-xs tracking-widest text-gray-300">Preview do ranking</h2>
+          </div>
+          <p className="text-[10px] text-gray-500 -mt-2">
+            Defina manualmente se a unidade aparece "acesa" (movimentada) ou "em descanso" no ranking público desta semana. Deixe em Automático para seguir a atividade real da unidade.
+          </p>
+          <div className="space-y-3">
+            {ranking.map((row, index) => {
+              const manual = row.unidade.manualMovimentoSemana;
+              const isUpdating = updatingMovimentoId === row.unidade.id;
+              return (
+                <div key={row.unidade.id} className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A]/60 p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">#{index + 1}</p>
@@ -654,299 +452,77 @@ export const Ranking: React.FC<RankingProps> = ({ user }) => {
                       <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">pts</p>
                     </div>
                   </div>
-                </button>
-              ))}
-              {ranking.length === 0 && (
-                <p className="text-sm text-gray-500">Nenhuma unidade elegível encontrada.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <Link2 size={16} className="text-[#00B2FF]" />
-              <h2 className="font-black uppercase text-xs tracking-widest text-gray-300">Links individuais</h2>
-            </div>
-            <p className="text-[10px] text-gray-500 mb-4">Envie para cada unidade ver apenas os próprios requisitos.</p>
-            <div className="space-y-2">
-              {units.map(unit => {
-                const unitCode = generateUnitCode(unit.id);
-                const isCopied = copiedUnitId === unit.id;
-                return (
-                  <div key={unit.id} className="rounded-xl border border-[#1F2937] bg-[#0B0F1A] p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-black text-sm text-white truncate">{unit.nome}</p>
-                      <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">#{unitCode}</p>
-                    </div>
+                  <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleCopyUnitLink(unit.id)}
-                      className="px-3 py-1.5 rounded-lg border border-[#1F2937] bg-[#111827] text-[10px] font-black uppercase tracking-widest text-gray-300 hover:text-white flex items-center gap-1 shrink-0 transition-colors"
+                      onClick={() => handleToggleMovimento(row.unidade, null)}
+                      disabled={isUpdating}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-colors disabled:opacity-50 ${
+                        manual == null ? 'bg-white/10 border-white/20 text-white' : 'border-[#1F2937] text-gray-500 hover:text-gray-300'
+                      }`}
                     >
-                      {isCopied
-                        ? <><CheckCircle2 size={12} className="text-emerald-400" /> Copiado</>
-                        : <><Copy size={12} /> Link</>
-                      }
+                      <RotateCcw size={11} /> Auto
+                    </button>
+                    <button
+                      onClick={() => handleToggleMovimento(row.unidade, true)}
+                      disabled={isUpdating}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-colors disabled:opacity-50 ${
+                        manual === true ? 'bg-[#FFD60A]/15 border-[#FFD60A]/40 text-[#FFD60A]' : 'border-[#1F2937] text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      <Zap size={11} /> Sim
+                    </button>
+                    <button
+                      onClick={() => handleToggleMovimento(row.unidade, false)}
+                      disabled={isUpdating}
+                      className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-colors disabled:opacity-50 ${
+                        manual === false ? 'bg-white/5 border-white/15 text-gray-300' : 'border-[#1F2937] text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      <Snowflake size={11} /> Não
                     </button>
                   </div>
-                );
-              })}
-              {units.length === 0 && (
-                <p className="text-sm text-gray-500">Nenhuma unidade elegível.</p>
-              )}
-            </div>
+                </div>
+              );
+            })}
+            {ranking.length === 0 && (
+              <p className="text-sm text-gray-500">Nenhuma unidade elegível encontrada.</p>
+            )}
           </div>
-        </aside>
+        </div>
 
-        <section className="rounded-3xl border border-[#1F2937] bg-[#111827] p-6 space-y-6">
-          <div className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Novo requisito no trimestre</p>
-                <p className="text-sm text-gray-300">Adicione texto e pontuação para novas demandas durante o trimestre.</p>
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                {selectedQuarter?.name || 'Trimestre'}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Categoria</label>
-                <input
-                  value={newRequirementForm.category}
-                  onChange={e => setNewRequirementForm(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                  placeholder="Ex.: Secretaria"
-                />
-              </div>
-              <div className="space-y-1 xl:col-span-2">
-                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Texto do requisito</label>
-                <input
-                  value={newRequirementForm.name}
-                  onChange={e => setNewRequirementForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                  placeholder="Ex.: Ação missionária extra no bairro"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Pontuação</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={newRequirementForm.points}
-                  onChange={e => {
-                    const next = Number(e.target.value);
-                    setNewRequirementForm(prev => ({ ...prev, points: Number.isFinite(next) ? next : 0 }));
-                  }}
-                  className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Descrição (opcional)</label>
-              <input
-                value={newRequirementForm.description}
-                onChange={e => setNewRequirementForm(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                placeholder="Detalhes de validação desse requisito"
-              />
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleCreateRequirement}
-                disabled={savingRequirement || !selectedQuarter || selectedQuarter.status === 'CLOSED'}
-                className="px-4 py-2 rounded-xl bg-[#E53935] text-white text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center gap-2"
-              >
-                {savingRequirement ? <Loader2 className="animate-spin" size={14} /> : <PlusCircle size={14} />}
-                Adicionar requisito
-              </button>
-            </div>
+        <div className="rounded-3xl border border-[#1F2937] bg-[#111827] p-5 h-fit">
+          <div className="flex items-center gap-2 mb-1">
+            <Link2 size={16} className="text-[#00B2FF]" />
+            <h2 className="font-black uppercase text-xs tracking-widest text-gray-300">Links individuais</h2>
           </div>
-
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-            <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Unidade selecionada</p>
-              <h2 className="text-2xl font-black text-white">{selectedUnit?.nome || 'Selecione uma unidade'}</h2>
-            </div>
-            <div className="flex gap-2 text-xs font-black uppercase">
-              <span className="px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-300 border border-emerald-500/10">Base {totals.base}</span>
-              <span className="px-3 py-2 rounded-xl bg-blue-500/10 text-blue-200 border border-blue-500/10">Bônus {totals.bonus}</span>
-              <span className="px-3 py-2 rounded-xl bg-red-500/10 text-red-300 border border-red-500/10">Penalidade {totals.penalty}</span>
-            </div>
+          <p className="text-[10px] text-gray-500 mb-4">Envie para cada unidade ver apenas os próprios requisitos.</p>
+          <div className="space-y-2">
+            {units.map(unit => {
+              const unitCode = generateUnitCode(unit.id);
+              const isCopied = copiedUnitId === unit.id;
+              return (
+                <div key={unit.id} className="rounded-xl border border-[#1F2937] bg-[#0B0F1A] p-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-black text-sm text-white truncate">{unit.nome}</p>
+                    <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">#{unitCode}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyUnitLink(unit.id)}
+                    className="px-3 py-1.5 rounded-lg border border-[#1F2937] bg-[#111827] text-[10px] font-black uppercase tracking-widest text-gray-300 hover:text-white flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    {isCopied
+                      ? <><CheckCircle2 size={12} className="text-emerald-400" /> Copiado</>
+                      : <><Copy size={12} /> Link</>
+                    }
+                  </button>
+                </div>
+              );
+            })}
+            {units.length === 0 && (
+              <p className="text-sm text-gray-500">Nenhuma unidade elegível.</p>
+            )}
           </div>
-
-          {groupedRequirements.map(([category, items]) => (
-            <div key={category} className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#1F2937]">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{category}</p>
-                <p className="text-sm text-gray-300">{items.length} requisitos</p>
-              </div>
-              <div className="divide-y divide-[#1F2937]">
-                {items.map(requirement => {
-                  const row = state[requirement.id];
-                  return (
-                    <div key={requirement.id} className="p-5 space-y-4">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-black text-white">{requirement.name}</span>
-                            {requirement.origem === 'CUSTOM' && (
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-[#E53935]/10 text-[#FCA5A5]">
-                                Custom
-                              </span>
-                            )}
-                            <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-white/5 text-gray-300">
-                              {getRequirementRuleLabel(requirement.ruleType)}
-                            </span>
-                            {requirement.pointsPerUnit != null && (
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-blue-500/10 text-blue-200">
-                                {requirement.pointsPerUnit} por unidade
-                              </span>
-                            )}
-                            {requirement.maxManualScore != null && (
-                              <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-300">
-                                Máx {requirement.maxManualScore}
-                              </span>
-                            )}
-                          </div>
-                          {requirement.description && <p className="text-sm text-gray-500">{requirement.description}</p>}
-                          <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-gray-500">
-                            {requirement.bonusDescription && <span>Bônus: {requirement.bonusDescription}</span>}
-                            {requirement.penaltyDescription && <span>Penalidade: {requirement.penaltyDescription}</span>}
-                          </div>
-                        </div>
-                        <div className="text-right space-y-2">
-                          {requirement.origem === 'CUSTOM' && (
-                            <button
-                              onClick={() => handleDeleteRequirement(requirement)}
-                              disabled={savingRequirement || !selectedQuarter || selectedQuarter.status === 'CLOSED'}
-                              className="px-3 py-1.5 rounded-lg border border-red-500/30 text-[10px] font-black uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:opacity-60 inline-flex items-center gap-1"
-                            >
-                              <Trash2 size={12} /> Remover
-                            </button>
-                          )}
-                          <p className="text-2xl font-black text-white">{row?.calculatedPoints || 0}</p>
-                          <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">
-                            base {row?.basePoints || 0} | b {row?.bonusPoints || 0} | p {row?.penaltyPoints || 0}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                        {allowsCompletionToggle(requirement) && (
-                          <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="w-4 h-4 accent-[#E53935]"
-                              checked={!!row?.completed}
-                              onChange={e => handleChange(requirement, { completed: e.target.checked })}
-                            />
-                            <span className="text-sm font-bold text-gray-200">Cumprido</span>
-                          </label>
-                        )}
-
-                        {requirement.requiresQuantity && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">
-                              {requirement.quantityLabel || 'Quantidade'}
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={requirement.maxQuantity ?? undefined}
-                              value={row?.quantity ?? 0}
-                              onChange={e => handleChange(requirement, { quantity: Number(e.target.value) })}
-                              className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                            />
-                          </div>
-                        )}
-
-                        {supportsManualScore(requirement) && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Pontuação manual</label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={requirement.maxManualScore ?? undefined}
-                              value={row?.manualScore ?? 0}
-                              onChange={e => handleChange(requirement, { manualScore: Number(e.target.value) })}
-                              className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                            />
-                          </div>
-                        )}
-
-                        {requirement.allowBonus && requirement.bonusType && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">{bonusInputLabel(requirement)}</label>
-                            {requirement.bonusType === 'FIXED' ? (
-                              <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 accent-[#E53935]"
-                                  checked={(row?.bonusInput ?? 0) > 0}
-                                  onChange={e => handleChange(requirement, { bonusInput: e.target.checked ? 1 : 0 })}
-                                />
-                                <span className="text-sm font-bold text-gray-200">Aplicar bônus</span>
-                              </label>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                value={row?.bonusInput ?? 0}
-                                onChange={e => handleChange(requirement, { bonusInput: Number(e.target.value) })}
-                                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                              />
-                            )}
-                          </div>
-                        )}
-
-                        {requirement.allowPenalty && requirement.penaltyType && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">{penaltyInputLabel(requirement)}</label>
-                            {requirement.penaltyType === 'FIXED' ? (
-                              <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] p-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 accent-[#E53935]"
-                                  checked={(row?.penaltyInput ?? 0) > 0}
-                                  onChange={e => handleChange(requirement, { penaltyInput: e.target.checked ? 1 : 0 })}
-                                />
-                                <span className="text-sm font-bold text-gray-200">Aplicar penalidade</span>
-                              </label>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                value={row?.penaltyInput ?? 0}
-                                onChange={e => handleChange(requirement, { penaltyInput: Number(e.target.value) })}
-                                className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                              />
-                            )}
-                          </div>
-                        )}
-
-                        <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                          <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Observação</label>
-                          <input
-                            value={row?.notes || ''}
-                            onChange={e => handleChange(requirement, { notes: e.target.value })}
-                            className="w-full bg-[#111827] border border-[#1F2937] rounded-xl p-3 text-sm font-bold"
-                            placeholder="Observação rápida"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {requirements.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-[#1F2937] p-10 text-center text-gray-500">
-              Nenhum requisito configurado para este trimestre.
-            </div>
-          )}
-        </section>
+        </div>
       </section>
     </div>
   );

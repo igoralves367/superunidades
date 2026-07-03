@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   BookOpen, CalendarCheck, CheckCircle2, Circle, Clock, Edit2,
   ExternalLink, Heart, Loader2, Lock, Plus, Save, Send, Snowflake, Users, X, XCircle, Zap
@@ -13,6 +14,19 @@ import { calculateRequirementBreakdown, generateUnitCode } from '../services/ran
 import { computeEngagementRows } from '../services/engagement';
 import { DnaIndicatorCard } from '../components/UnitDna/DnaIndicatorCard';
 import { calcDnaStars } from '../components/UnitDna/dnaClasses';
+import { useToast } from '../store/ToastContext';
+
+// ---------------------------------------------------------------------------
+// Motion variants (Heritage — sutil, respeita prefers-reduced-motion)
+// ---------------------------------------------------------------------------
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
+const riseItem = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 24 } },
+};
 
 // ---------------------------------------------------------------------------
 // Route parsing
@@ -206,7 +220,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
           href={chamadaLink}
           target="_blank"
           rel="noreferrer"
-          className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-[#00F5A0]/30 bg-[#00F5A0]/5 text-[#00F5A0] text-xs font-black uppercase tracking-widest hover:bg-[#00F5A0]/10 transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-[#6FBF84]/30 bg-[#6FBF84]/5 text-[#6FBF84] text-xs font-black uppercase tracking-widest hover:bg-[#6FBF84]/10 transition-colors"
         >
           <CalendarCheck size={15} /> Validar Presença
           <ExternalLink size={12} className="opacity-60" />
@@ -216,7 +230,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
             href={sgcLink}
             target="_blank"
             rel="noreferrer"
-            className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-[#FFD60A]/30 bg-[#FFD60A]/5 text-[#FFD60A] text-xs font-black uppercase tracking-widest hover:bg-[#FFD60A]/10 transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-[#E4C35C]/30 bg-[#E4C35C]/5 text-[#E4C35C] text-xs font-black uppercase tracking-widest hover:bg-[#E4C35C]/10 transition-colors"
           >
             <Users size={15} /> Acessar SGC
             <ExternalLink size={12} className="opacity-60" />
@@ -236,10 +250,10 @@ const MembersTab: React.FC<MembersTabProps> = ({
             .map(cid => classes.find(c => c.id === cid))
             .filter(Boolean) as Classe[];
           return (
-            <article key={desbravador.id} className="rounded-[20px] border border-white/10 bg-[#0B0F1A]/80 overflow-hidden">
+            <article key={desbravador.id} className="rounded-[20px] border border-white/10 bg-[#0A1428]/80 overflow-hidden">
               <div className="flex items-center justify-between gap-3 p-4">
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-black text-white truncate">{desbravador.nome}</h3>
+                  <h3 className="font-black text-parchment truncate">{desbravador.nome}</h3>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {dbvClasses.map(cl => (
                       <span key={cl.id} className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
@@ -251,7 +265,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
                       <span className="text-[10px] text-gray-500">· PG: {desbravador.pgNome}</span>
                     )}
                     {desbravador.batizado && (
-                      <span className="text-[10px] text-[#00F5A0] font-bold">· Batizado</span>
+                      <span className="text-[10px] text-[#6FBF84] font-bold">· Batizado</span>
                     )}
                   </div>
                 </div>
@@ -261,14 +275,14 @@ const MembersTab: React.FC<MembersTabProps> = ({
                   </p>
                   <div className="w-20 h-1.5 rounded-full bg-white/10 mt-1 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[#00F5A0]"
+                      className="h-full rounded-full bg-[#6FBF84]"
                       style={{ width: `${freqPercent}%` }}
                     />
                   </div>
                 </div>
                 <button
                   onClick={() => isEditing ? cancelEdit() : startEdit(desbravador)}
-                  className="p-2 rounded-xl hover:bg-white/10 text-gray-500 hover:text-white transition-colors"
+                  className="p-2 rounded-xl hover:bg-white/10 text-gray-500 hover:text-parchment transition-colors"
                 >
                   {isEditing ? <X size={16} /> : <Edit2 size={16} />}
                 </button>
@@ -281,7 +295,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
                     <input
                       value={editNome}
                       onChange={e => setEditNome(e.target.value)}
-                      className="w-full mt-1 bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFD60A]/50"
+                      className="w-full mt-1 bg-[#13233F] border border-[#1B3052] rounded-xl px-3 py-2.5 text-sm text-parchment outline-none focus:border-[#E4C35C]/50"
                     />
                   </div>
 
@@ -297,8 +311,8 @@ const MembersTab: React.FC<MembersTabProps> = ({
                             onClick={() => toggleClasse(cl.id)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${
                               sel
-                                ? 'bg-[#1F2937] border-white/20 text-white'
-                                : 'bg-[#0B0F1A] border-[#1F2937] text-gray-500 hover:border-gray-500'
+                                ? 'bg-[#1B3052] border-white/20 text-parchment'
+                                : 'bg-[#0A1428] border-[#1B3052] text-gray-500 hover:border-gray-500'
                             }`}
                           >
                             <span className="w-2 h-2 rounded-full" style={{ background: cl.corHex }} />
@@ -310,7 +324,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="flex items-center gap-3 rounded-xl border border-[#1F2937] bg-[#111827] px-4 py-3 cursor-pointer">
+                    <label className="flex items-center gap-3 rounded-xl border border-[#1B3052] bg-[#13233F] px-4 py-3 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editBatizado}
@@ -325,7 +339,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
                         value={editPgNome}
                         onChange={e => setEditPgNome(e.target.value)}
                         placeholder="Nome do PG..."
-                        className="w-full mt-1 bg-[#111827] border border-[#1F2937] rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-[#FFD60A]/50"
+                        className="w-full mt-1 bg-[#13233F] border border-[#1B3052] rounded-xl px-3 py-2.5 text-sm text-parchment outline-none focus:border-[#E4C35C]/50"
                       />
                     </div>
                   </div>
@@ -333,7 +347,7 @@ const MembersTab: React.FC<MembersTabProps> = ({
                   <button
                     onClick={() => handleSave(desbravador)}
                     disabled={saving}
-                    className="w-full py-2.5 rounded-xl bg-[#FFD60A] text-[#0B0F1A] text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 rounded-xl bg-[#E4C35C] text-[#0A1428] text-xs font-black uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Salvar Edição
@@ -377,7 +391,7 @@ const QuarterRequirementsView: React.FC<QuarterRequirementsViewProps> = ({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 px-1">
         <p className="text-[11px] text-gray-500 font-semibold">{doneCount}/{requirements.length} requisitos cumpridos</p>
-        <span className="text-lg font-black text-[#FFD60A]">{totalPoints} pts</span>
+        <span className="text-lg font-black text-[#E4C35C]">{totalPoints} pts</span>
       </div>
       {grouped.map(([category, items]) => (
         <section key={category} className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden">
@@ -392,11 +406,11 @@ const QuarterRequirementsView: React.FC<QuarterRequirementsViewProps> = ({
               return (
                 <div key={req.id} className="flex items-center gap-3 px-4 py-3">
                   {done
-                    ? <CheckCircle2 size={16} className="text-[#00F5A0] shrink-0" />
+                    ? <CheckCircle2 size={16} className="text-[#6FBF84] shrink-0" />
                     : <Circle size={16} className="text-gray-700 shrink-0" />
                   }
                   <p className={`text-sm flex-1 ${done ? 'text-gray-200' : 'text-gray-600'}`}>{req.name}</p>
-                  {done && <span className="text-sm font-black text-[#FFD60A] shrink-0">+{pts}</span>}
+                  {done && <span className="text-sm font-black text-[#E4C35C] shrink-0">+{pts}</span>}
                 </div>
               );
             })}
@@ -425,9 +439,9 @@ interface ActiveQuarterEditorProps {
 
 const SUBMISSION_STATUS_BADGE: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   NONE:     { label: 'Não enviado',          className: 'text-gray-400 border-gray-700',        icon: null },
-  PENDING:  { label: 'Aguardando validação', className: 'text-[#FFD60A] border-[#FFD60A]/40',   icon: <Clock size={12} /> },
-  APPROVED: { label: 'Aprovado',             className: 'text-[#34D399] border-[#34D399]/40',   icon: <CheckCircle2 size={12} /> },
-  REJECTED: { label: 'Reprovado',            className: 'text-[#F87171] border-[#F87171]/40',   icon: <XCircle size={12} /> },
+  PENDING:  { label: 'Aguardando validação', className: 'text-[#E4C35C] border-[#E4C35C]/40',   icon: <Clock size={12} /> },
+  APPROVED: { label: 'Aprovado',             className: 'text-[#6FBF84] border-[#6FBF84]/40',   icon: <CheckCircle2 size={12} /> },
+  REJECTED: { label: 'Reprovado',            className: 'text-[#D98A8A] border-[#D98A8A]/40',   icon: <XCircle size={12} /> },
 };
 
 const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
@@ -438,6 +452,7 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
   );
   const [drafts, setDrafts] = useState<Record<string, { observation: string; quantity: string }>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { success, error } = useToast();
 
   const reload = async () => {
     const docs = await fs.listRankingProgress(clubId, quarter.id);
@@ -476,8 +491,10 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
         { id: unitId, nome: unitName }
       );
       await reload();
+      success('Requisito enviado para validação da diretoria.');
     } catch (err) {
       console.error('Erro ao enviar requisito:', err);
+      error('Não foi possível enviar. Sem permissão de escrita ou falha de conexão — tente novamente ou avise a diretoria.', 6000);
     } finally {
       setBusyId(null);
     }
@@ -488,8 +505,10 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
     try {
       await fs.withdrawRequirementSubmission(clubId, quarter.id, unitId, reqId);
       await reload();
+      success('Envio retirado.');
     } catch (err) {
       console.error('Erro ao retirar requisito:', err);
+      error('Não foi possível retirar. Sem permissão de escrita ou falha de conexão — tente novamente ou avise a diretoria.', 6000);
     } finally {
       setBusyId(null);
     }
@@ -531,10 +550,10 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
               const entry = resultados[req.id];
 
               return (
-                <div key={req.id} className="rounded-2xl border border-[#1F2937] bg-[#0B0F1A] p-4 space-y-3">
+                <div key={req.id} className="rounded-2xl border border-[#1B3052] bg-[#0A1428] p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-white text-sm">{req.name}</p>
+                      <p className="font-bold text-parchment text-sm">{req.name}</p>
                       {req.description && (
                         <p className="text-xs text-gray-500 mt-0.5 leading-snug">{req.description}</p>
                       )}
@@ -547,13 +566,13 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
                   </div>
 
                   {status === 'REJECTED' && entry?.submission?.rejectionReason && (
-                    <p className="rounded-lg bg-[#F87171]/10 px-3 py-2 text-xs text-[#F87171]">
+                    <p className="rounded-lg bg-[#D98A8A]/10 px-3 py-2 text-xs text-[#D98A8A]">
                       Motivo: {entry.submission.rejectionReason}
                     </p>
                   )}
 
                   {isApproved ? (
-                    <p className="flex items-center gap-2 text-xs text-[#34D399]">
+                    <p className="flex items-center gap-2 text-xs text-[#6FBF84]">
                       <Lock size={14} /> Aprovado pela diretoria — pontos aplicados ao ranking.
                     </p>
                   ) : (
@@ -568,7 +587,7 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
                             min={0}
                             value={draft.quantity}
                             onChange={e => patchDraft(req.id, { quantity: e.target.value })}
-                            className="mt-1 w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#FFD60A]/50 focus:outline-none"
+                            className="mt-1 w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-parchment focus:border-[#E4C35C]/50 focus:outline-none"
                           />
                         </div>
                       )}
@@ -577,13 +596,13 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
                         value={draft.observation}
                         onChange={e => patchDraft(req.id, { observation: e.target.value })}
                         rows={2}
-                        className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#FFD60A]/50 focus:outline-none resize-none"
+                        className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-parchment focus:border-[#E4C35C]/50 focus:outline-none resize-none"
                       />
                       <div className="flex gap-2 flex-wrap">
                         <button
                           onClick={() => submit(req)}
                           disabled={busy}
-                          className="flex items-center gap-2 rounded-xl bg-[#FFD60A] px-4 py-2 text-sm font-black text-[#0B0F1A] disabled:opacity-50"
+                          className="flex items-center gap-2 rounded-xl bg-[#E4C35C] px-4 py-2 text-sm font-black text-[#0A1428] disabled:opacity-50"
                         >
                           {busy ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
                           {isPending ? 'Atualizar envio' : 'Enviar para validação'}
@@ -624,6 +643,7 @@ interface SocioCardProps {
 }
 
 const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, parcelas, onToggle, onSavePrevisao }) => {
+  const reduce = useReducedMotion();
   const [previsao, setPrevisao] = React.useState(socio.previsaoPagamento ?? '');
   const [savingPrevisao, setSavingPrevisao] = React.useState(false);
 
@@ -636,7 +656,7 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
     <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(11,15,26,0.97))] overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
         <div>
-          <p className="text-sm font-bold text-white">{socio.nome}</p>
+          <p className="text-sm font-bold text-parchment">{socio.nome}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">
             R$ {socio.valorMensal.toFixed(2)}/mês
             {socio.trimestreRef
@@ -645,19 +665,26 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
           </p>
         </div>
         <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-          pago ? 'text-[#34D399] border-[#34D399]/40' : 'text-[#FFD60A] border-[#FFD60A]/40'
+          pago ? 'text-[#6FBF84] border-[#6FBF84]/40' : 'text-[#E4C35C] border-[#E4C35C]/40'
         }`}>
           {pago ? 'Pago' : 'Pendente'}
         </span>
       </button>
-      {expanded && (
-        <div className="border-t border-white/10 px-4 py-3 space-y-3">
+      <AnimatePresence initial={false}>
+       {expanded && (
+        <motion.div
+          className="border-t border-white/10 px-4 py-3 space-y-3 overflow-hidden"
+          initial={reduce ? false : { height: 0, opacity: 0 }}
+          animate={reduce ? undefined : { height: 'auto', opacity: 1 }}
+          exit={reduce ? undefined : { height: 0, opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeInOut' }}
+        >
           {/* Parcela do mês atual se pendente */}
           {!pago && (
-            <div className="rounded-xl bg-[#FFD60A]/5 border border-[#FFD60A]/20 px-3 py-2.5 space-y-2">
+            <div className="rounded-xl bg-[#E4C35C]/5 border border-[#E4C35C]/20 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-white font-bold">{formatMesRef(mesAtual)} <span className="text-gray-500 font-normal">(mês atual)</span></span>
-                <span className="text-[#FFD60A] font-black uppercase text-[10px]">Pendente</span>
+                <span className="text-parchment font-bold">{formatMesRef(mesAtual)} <span className="text-gray-500 font-normal">(mês atual)</span></span>
+                <span className="text-[#E4C35C] font-black uppercase text-[10px]">Pendente</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1">
@@ -666,13 +693,13 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
                     type="date"
                     value={previsao}
                     onChange={e => setPrevisao(e.target.value)}
-                    className="w-full bg-[#0B0F1A] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-[#FFD60A]/40"
+                    className="w-full bg-[#0A1428] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-parchment outline-none focus:border-[#E4C35C]/40"
                   />
                 </div>
                 <button
                   onClick={handleSavePrevisao}
                   disabled={savingPrevisao || !previsao}
-                  className="mt-5 px-3 py-1.5 rounded-lg bg-[#FFD60A]/20 text-[#FFD60A] text-[10px] font-black uppercase hover:bg-[#FFD60A]/30 disabled:opacity-40 transition whitespace-nowrap"
+                  className="mt-5 px-3 py-1.5 rounded-lg bg-[#E4C35C]/20 text-[#E4C35C] text-[10px] font-black uppercase hover:bg-[#E4C35C]/30 disabled:opacity-40 transition whitespace-nowrap"
                 >
                   {savingPrevisao ? '...' : 'Salvar'}
                 </button>
@@ -694,13 +721,14 @@ const SocioCard: React.FC<SocioCardProps> = ({ socio, expanded, pago, mesAtual, 
                 <span className="flex items-center gap-3">
                   <span className="text-gray-400">R$ {p.valorPago.toFixed(2)}</span>
                   <span className="text-gray-600">{p.dataPagamento}</span>
-                  <span className="text-[#34D399] font-black uppercase">Pago</span>
+                  <span className="text-[#6FBF84] font-black uppercase">Pago</span>
                 </span>
               </div>
             ))
           )}
-        </div>
-      )}
+        </motion.div>
+       )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -727,6 +755,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   clubId, unit, quarters, requirementsByQuarter, progressByQuarter,
   desbravadores, reunioes, presencas, classes, publicSlug
 }) => {
+  const reduce = useReducedMotion();
+  const motionStart = reduce ? undefined : 'hidden';
+  const motionShow = reduce ? undefined : 'show';
+  const { success: toastSuccess, error: toastError } = useToast();
   const [activeTab, setActiveTab] = useState<PanelTab>('trimestres');
 
   // Sócios da unidade
@@ -830,8 +862,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
 
       setIsSocioModalOpen(false);
       setSocioForm({ nome: '', valorMensal: '', mesIngresso: getCurrentMesRef(), responsavelId: '' });
+      toastSuccess('Sócio registrado e enviado para aprovação.');
     } catch (err) {
       console.error('Erro ao criar sócio:', err);
+      toastError('Não foi possível registrar o sócio. Sem permissão de escrita ou falha de conexão — tente novamente ou avise a diretoria.', 6000);
     } finally {
       setSavingSocio(false);
     }
@@ -875,7 +909,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
   }, [selectedQuarter, activeQuarter, sortedQuarters, requirementsByQuarter, progressByQuarter, desbravadores, reunioes, presencas, unit.id]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(0,178,255,0.12),_transparent_25%),linear-gradient(180deg,#050816_0%,#0B0F1A_100%)] text-gray-100">
+    <div className="min-h-screen heritage-bg text-parchment font-inter">
       <style>{`
         @keyframes shimmer {
           0% { background-position: -200% center; }
@@ -887,33 +921,43 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
         {/* Header */}
         <header className="text-center space-y-3 py-4">
           <div className="flex justify-center">
-            <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
+            <motion.div
+              className="patch-ring w-24 h-24 rounded-full"
+              initial={reduce ? false : { opacity: 0, scale: 0.8 }}
+              animate={reduce ? undefined : { opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+            >
+              <div
+                className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
+                style={{
+                  border: '2px solid rgba(200,160,75,0.4)',
+                  boxShadow: '0 0 24px rgba(228,195,92,0.18)',
+                  background: '#0A1428',
+                }}
+              >
+                {unit.imageUrl
+                  ? <img src={unit.imageUrl} alt={unit.nome} className="w-full h-full object-cover" />
+                  : <span className="font-display font-bold text-2xl text-brass-bright">{fallbackAvatar(unit.nome)}</span>
+                }
+              </div>
+            </motion.div>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-[0.4em] font-bold text-brass/70">Clubão · Patch da Unidade</p>
+            <h1
+              className="font-display text-3xl sm:text-4xl font-bold tracking-widest uppercase"
               style={{
-                border: '2px solid rgba(255,255,255,0.12)',
-                boxShadow: '0 0 24px rgba(0,178,255,0.15)',
-                background: '#0B0F1A',
+                background: 'linear-gradient(90deg, #F2E9D8 0%, #E4C35C 50%, #F2E9D8 100%)',
+                backgroundSize: '200% auto',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                animation: 'shimmer 4s linear infinite',
+                letterSpacing: '0.08em',
               }}
             >
-              {unit.imageUrl
-                ? <img src={unit.imageUrl} alt={unit.nome} className="w-full h-full object-cover" />
-                : <span className="font-black text-2xl text-gray-300">{fallbackAvatar(unit.nome)}</span>
-              }
-            </div>
+              {unit.nome}
+            </h1>
           </div>
-          <h1
-            className="text-3xl sm:text-4xl font-black tracking-widest uppercase"
-            style={{
-              background: 'linear-gradient(90deg, #FFFFFF 0%, #FFD60A 50%, #FFFFFF 100%)',
-              backgroundSize: '200% auto',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              animation: 'shimmer 4s linear infinite',
-              textShadow: 'none',
-              letterSpacing: '0.08em',
-            }}
-          >
-            {unit.nome}
-          </h1>
         </header>
 
         {/* Progresso */}
@@ -922,34 +966,38 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 px-1">
               Progresso — {progressoIndicadores.quarterName}
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <DnaIndicatorCard
-                title="Requisitos do Clubão"
-                value={progressoIndicadores.rankingPercent === null ? null : Math.round(progressoIndicadores.rankingPercent * 100)}
-                stars={progressoIndicadores.rankingStars}
-                color="#22D3EE"
-                emptyMessage="Nenhum requisito"
-                description={`${progressoIndicadores.rankingCompletedCount} de ${progressoIndicadores.rankingTotalRequirements} cumpridos`}
-              />
-              <DnaIndicatorCard
-                title="Frequência Média"
-                value={progressoIndicadores.freqPercent}
-                color="#A78BFA"
-                emptyMessage={progressoIndicadores.totalMeetings === 0 ? 'Sem reuniões' : 'Sem membros'}
-                description={`${progressoIndicadores.memberCount} membros · ${progressoIndicadores.totalMeetings} reuniões`}
-              />
-            </div>
+            <motion.div className="grid grid-cols-2 gap-3" variants={staggerContainer} initial={motionStart} animate={motionShow}>
+              <motion.div variants={riseItem}>
+                <DnaIndicatorCard
+                  title="Requisitos do Clubão"
+                  value={progressoIndicadores.rankingPercent === null ? null : Math.round(progressoIndicadores.rankingPercent * 100)}
+                  stars={progressoIndicadores.rankingStars}
+                  color="#E4C35C"
+                  emptyMessage="Nenhum requisito"
+                  description={`${progressoIndicadores.rankingCompletedCount} de ${progressoIndicadores.rankingTotalRequirements} cumpridos`}
+                />
+              </motion.div>
+              <motion.div variants={riseItem}>
+                <DnaIndicatorCard
+                  title="Frequência Média"
+                  value={progressoIndicadores.freqPercent}
+                  color="#C8A04B"
+                  emptyMessage={progressoIndicadores.totalMeetings === 0 ? 'Sem reuniões' : 'Sem membros'}
+                  description={`${progressoIndicadores.memberCount} membros · ${progressoIndicadores.totalMeetings} reuniões`}
+                />
+              </motion.div>
+            </motion.div>
           </div>
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 rounded-2xl bg-[#0B0F1A] border border-white/10 p-1">
+        <div className="flex gap-2 rounded-2xl bg-[#0A1428] border border-dashed border-brass/20 p-1">
           <button
             onClick={() => setActiveTab('trimestres')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-display text-xs font-bold uppercase tracking-widest transition-all ${
               activeTab === 'trimestres'
-                ? 'bg-[#111827] text-white border border-white/10'
-                : 'text-gray-500 hover:text-gray-300'
+                ? 'bg-[#13233F] text-brass-bright border border-dashed border-brass/40'
+                : 'text-slatemut hover:text-parchment'
             }`}
           >
             <BookOpen size={14} />
@@ -957,10 +1005,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('membros')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-display text-xs font-bold uppercase tracking-widest transition-all ${
               activeTab === 'membros'
-                ? 'bg-[#111827] text-white border border-white/10'
-                : 'text-gray-500 hover:text-gray-300'
+                ? 'bg-[#13233F] text-brass-bright border border-dashed border-brass/40'
+                : 'text-slatemut hover:text-parchment'
             }`}
           >
             <Users size={14} />
@@ -968,10 +1016,10 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('socios')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-display text-xs font-bold uppercase tracking-widest transition-all ${
               activeTab === 'socios'
-                ? 'bg-[#111827] text-white border border-white/10'
-                : 'text-gray-500 hover:text-gray-300'
+                ? 'bg-[#13233F] text-brass-bright border border-dashed border-brass/40'
+                : 'text-slatemut hover:text-parchment'
             }`}
           >
             <Heart size={14} />
@@ -979,6 +1027,14 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
           </button>
         </div>
 
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={reduce ? undefined : { opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
         {/* Tab: Trimestres */}
         {activeTab === 'trimestres' && (
           <div className="space-y-4">
@@ -986,7 +1042,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
               <select
                 value={selectedQuarterId}
                 onChange={e => setSelectedQuarterId(e.target.value)}
-                className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm font-bold text-white outline-none"
+                className="w-full bg-[#0A1428] border border-[#1B3052] rounded-xl px-4 py-3 text-sm font-bold text-parchment outline-none"
               >
                 {sortedQuarters.map(q => (
                   <option key={q.id} value={q.id}>
@@ -1039,7 +1095,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 <p className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400">
                   Sócios Desbravador · Clubão
                 </p>
-                <p className="text-sm font-bold text-white mt-0.5">
+                <p className="text-sm font-bold text-parchment mt-0.5">
                   {sociosNovosTrimestre.length} de {SOCIO_META} novos este trimestre
                 </p>
                 <p className="text-[10px] text-gray-600 mt-0.5">
@@ -1048,7 +1104,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
               </div>
               <button
                 onClick={() => setIsSocioModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#FFD60A] text-black text-xs font-black uppercase tracking-wider hover:brightness-110 transition"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#E4C35C] text-black text-xs font-black uppercase tracking-wider hover:brightness-110 transition"
               >
                 <Plus size={14} /> Novo Sócio
               </button>
@@ -1069,7 +1125,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 {/* Sócios novos deste trimestre — só exibe a seção se houver */}
                 {sociosNovosTrimestre.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#34D399] px-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6FBF84] px-1">
                       Recrutados este trimestre ({sociosNovosTrimestre.length})
                     </p>
                     <div className="space-y-3">
@@ -1115,21 +1171,35 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
             )}
           </div>
         )}
+          </motion.div>
+        </AnimatePresence>
 
-        <p className="text-center text-[10px] uppercase tracking-[0.3em] font-black text-gray-700 pb-6">
-          Super Unidades — Painel individual
+        <p className="text-center font-display text-[10px] uppercase tracking-[0.3em] font-bold text-brass/30 pb-6">
+          Super Unidades — Ordem do Mérito
         </p>
       </div>
 
-      {isSocioModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setIsSocioModalOpen(false)}>
-          <div
-            className="w-full max-w-md rounded-[24px] border border-white/10 bg-[#0B0F1A] p-6 space-y-5"
+      <AnimatePresence>
+       {isSocioModalOpen && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+          onClick={() => setIsSocioModalOpen(false)}
+          initial={reduce ? false : { opacity: 0 }}
+          animate={reduce ? undefined : { opacity: 1 }}
+          exit={reduce ? undefined : { opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="w-full max-w-md rounded-[24px] border border-dashed border-brass/25 bg-[#0A1428] p-6 space-y-5"
             onClick={e => e.stopPropagation()}
+            initial={reduce ? false : { opacity: 0, scale: 0.92, y: 12 }}
+            animate={reduce ? undefined : { opacity: 1, scale: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, scale: 0.95, y: 8 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 26 }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-black text-white">Novo Sócio</h2>
-              <button onClick={() => setIsSocioModalOpen(false)} className="text-gray-500 hover:text-white">
+              <h2 className="font-display text-lg font-bold uppercase tracking-wide text-parchment">Novo Sócio</h2>
+              <button onClick={() => setIsSocioModalOpen(false)} className="text-gray-500 hover:text-parchment">
                 <X size={20} />
               </button>
             </div>
@@ -1144,7 +1214,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                   value={socioForm.nome}
                   onChange={e => setSocioForm(f => ({ ...f, nome: e.target.value }))}
                   placeholder="Irmão Silva"
-                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                  className="w-full bg-[#13233F] border border-white/10 rounded-xl px-4 py-3 text-sm text-parchment outline-none focus:border-[#E4C35C]/40"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1158,7 +1228,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                     value={socioForm.valorMensal}
                     onChange={e => setSocioForm(f => ({ ...f, valorMensal: e.target.value }))}
                     placeholder="50.00"
-                    className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                    className="w-full bg-[#13233F] border border-white/10 rounded-xl px-4 py-3 text-sm text-parchment outline-none focus:border-[#E4C35C]/40"
                   />
                 </div>
                 <div>
@@ -1169,7 +1239,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                     type="month"
                     value={socioForm.mesIngresso}
                     onChange={e => setSocioForm(f => ({ ...f, mesIngresso: e.target.value }))}
-                    className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                    className="w-full bg-[#13233F] border border-white/10 rounded-xl px-4 py-3 text-sm text-parchment outline-none focus:border-[#E4C35C]/40"
                   />
                 </div>
               </div>
@@ -1180,7 +1250,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
                 <select
                   value={socioForm.responsavelId}
                   onChange={e => setSocioForm(f => ({ ...f, responsavelId: e.target.value }))}
-                  className="w-full bg-[#111827] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#FFD60A]/40"
+                  className="w-full bg-[#13233F] border border-white/10 rounded-xl px-4 py-3 text-sm text-parchment outline-none focus:border-[#E4C35C]/40"
                 >
                   <option value="">Não informado</option>
                   {desbravadores
@@ -1191,7 +1261,7 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
               </div>
               {activeTrimestreRef && (
                 <p className="text-[10px] text-gray-500 px-1">
-                  Será registrado como <span className="text-[#FFD60A] font-black">{activeTrimestreRef.replace('-Q', ' — Q')}º Trimestre</span> e enviado automaticamente para aprovação da diretoria.
+                  Será registrado como <span className="text-[#E4C35C] font-black">{activeTrimestreRef.replace('-Q', ' — Q')}º Trimestre</span> e enviado automaticamente para aprovação da diretoria.
                 </p>
               )}
             </div>
@@ -1199,14 +1269,15 @@ const CounselorPanel: React.FC<CounselorPanelProps> = ({
             <button
               onClick={handleCreateSocio}
               disabled={savingSocio || !socioForm.nome.trim() || !socioForm.valorMensal}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#FFD60A] text-black text-sm font-black uppercase tracking-wider hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#E4C35C] text-black text-sm font-black uppercase tracking-wider hover:brightness-110 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingSocio ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
               Registrar e Enviar para Aprovação
             </button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        </motion.div>
+       )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -1236,112 +1307,129 @@ const MainEngagementView: React.FC<MainEngagementViewProps> = ({
   const coldRows = rows.filter(r => !r.hasMovement);
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#06050E_0%,#0B0A18_100%)] text-gray-100 overflow-hidden">
+    <div className="min-h-screen heritage-bg text-parchment overflow-hidden font-inter">
       <style>{`
-        @keyframes flame-flicker {
+        @keyframes ember-flicker {
           0%,100% { transform: scaleY(1) rotate(-2deg); opacity: 1; }
           25%      { transform: scaleY(1.15) rotate(2deg); opacity: 0.85; }
           50%      { transform: scaleY(0.92) rotate(-1deg); opacity: 1; }
           75%      { transform: scaleY(1.08) rotate(3deg); opacity: 0.90; }
         }
-        @keyframes glow-pulse {
-          0%,100% { box-shadow: 0 0 18px 4px rgba(251,146,60,0.35), 0 0 40px 8px rgba(239,68,68,0.15); }
-          50%      { box-shadow: 0 0 30px 8px rgba(251,146,60,0.55), 0 0 60px 16px rgba(239,68,68,0.25); }
+        @keyframes brass-pulse {
+          0%,100% { box-shadow: 0 0 18px 4px rgba(228,195,92,0.30), 0 0 40px 8px rgba(178,58,58,0.12); }
+          50%      { box-shadow: 0 0 30px 8px rgba(228,195,92,0.48), 0 0 60px 16px rgba(178,58,58,0.20); }
         }
-        @keyframes border-glow {
-          0%,100% { border-color: rgba(251,146,60,0.45); }
-          50%      { border-color: rgba(251,146,60,0.85); }
+        @keyframes stitch-glow {
+          0%,100% { border-color: rgba(200,160,75,0.40); }
+          50%      { border-color: rgba(228,195,92,0.85); }
         }
-        .flame-emoji { display: inline-block; animation: flame-flicker 1.4s ease-in-out infinite; transform-origin: bottom center; }
-        .hot-card   { animation: border-glow 2s ease-in-out infinite; }
-        .hot-img    { animation: glow-pulse 2s ease-in-out infinite; }
+        .ember     { display: inline-block; animation: ember-flicker 1.4s ease-in-out infinite; transform-origin: bottom center; }
+        .lit-card  { animation: stitch-glow 2.4s ease-in-out infinite; }
+        .lit-emblem{ animation: brass-pulse 2.4s ease-in-out infinite; }
       `}</style>
 
       <div className="max-w-3xl mx-auto px-3 py-6 sm:px-4 sm:py-10 space-y-6">
 
-        {/* Header */}
-        <header className="rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(0,0,0,0.60))] p-6 sm:p-8 text-center space-y-4">
-          <div className="flex justify-center">
-            <img src="/logo.png" alt="Clubão de Unidades" className="w-28 h-28 object-contain drop-shadow-xl" />
+        {/* Banner / estandarte */}
+        <header className="relative rounded-[28px] border-2 border-dashed border-brass/30 bg-[linear-gradient(135deg,rgba(228,195,92,0.06),rgba(10,20,40,0.85))] p-6 sm:p-8 text-center space-y-4 overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(228,195,92,0.16),transparent_55%)] pointer-events-none" />
+          <div className="relative flex justify-center">
+            <div className="patch-ring w-28 h-28 rounded-full bg-navy-900 border border-brass/40 flex items-center justify-center overflow-hidden">
+              <img src="/logo.png" alt="Clubão de Unidades" className="w-20 h-20 object-contain drop-shadow-xl" />
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-none">
-              Unidades em <span className="text-[#F5C518]">Movimento</span>
+          <div className="relative">
+            <p className="text-[10px] uppercase tracking-[0.45em] font-bold text-brass/80">Clubão · Ordem do Mérito</p>
+            <h1 className="font-display text-4xl sm:text-6xl font-bold uppercase tracking-wide leading-none mt-1.5">
+              Unidades em <span className="text-brass-bright">Movimento</span>
             </h1>
             {clube?.nome && (
-              <p className="text-gray-300 font-bold mt-1 text-sm">{clube.nome}</p>
+              <p className="text-parchment/70 font-bold mt-2 text-sm">{clube.nome}</p>
             )}
-            <p className="text-gray-500 mt-1 text-xs">Semana atual — quem está em chamas e quem está gelada</p>
+            <p className="text-slatemut mt-1 text-xs">Semana atual — quem está com a fogueira acesa e quem está em descanso</p>
           </div>
         </header>
 
-        {/* Unidades em chamas — destaque */}
+        {/* Fogueira acesa — destaque */}
         {hotRows.length > 0 && (
-          <section>
+          <section className="space-y-3">
+            <div className="flex items-center gap-3 px-1">
+              <span className="h-px flex-1 bg-brass/20" />
+              <p className="text-[10px] uppercase tracking-[0.35em] font-bold text-brass/80 flex items-center gap-2">
+                <Zap size={11} className="fill-brass text-brass" /> Fogueira acesa
+              </p>
+              <span className="h-px flex-1 bg-brass/20" />
+            </div>
             <div className={`grid gap-4 ${hotRows.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
               {hotRows.map(row => (
-                <div
+                <article
                   key={row.unidade.id}
-                  className="hot-card relative rounded-[24px] overflow-hidden border bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(239,68,68,0.10),rgba(11,10,24,0.97))]"
+                  className="lit-card relative rounded-[24px] overflow-hidden border-2 border-dashed bg-[linear-gradient(135deg,rgba(228,195,92,0.12),rgba(178,58,58,0.08),rgba(10,20,40,0.97))]"
                 >
-                  {/* Glow de fundo */}
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_90%,rgba(251,146,60,0.22),transparent_65%)] pointer-events-none" />
+                  {/* Brilho de fundo */}
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_90%,rgba(228,195,92,0.18),transparent_65%)] pointer-events-none" />
 
                   <div className="relative flex items-center gap-5 px-6 py-5">
-                    {/* Chamas + imagem */}
+                    {/* Brasas + emblema (patch) */}
                     <div className="relative shrink-0">
-                      {/* Chamas decorativas acima da imagem */}
                       <div className="absolute -top-5 left-1/2 -translate-x-1/2 flex gap-0.5 text-xl leading-none select-none">
-                        <span className="flame-emoji" style={{ animationDelay: '0s' }}>🔥</span>
-                        <span className="flame-emoji" style={{ animationDelay: '0.3s', fontSize: '1.3rem' }}>🔥</span>
-                        <span className="flame-emoji" style={{ animationDelay: '0.6s' }}>🔥</span>
+                        <span className="ember" style={{ animationDelay: '0s' }}>🔥</span>
+                        <span className="ember" style={{ animationDelay: '0.3s', fontSize: '1.3rem' }}>🔥</span>
+                        <span className="ember" style={{ animationDelay: '0.6s' }}>🔥</span>
                       </div>
-                      <div className="hot-img w-20 h-20 rounded-2xl overflow-hidden border border-orange-400/40 flex items-center justify-center bg-black/20 mt-3">
+                      <div className="lit-emblem patch-ring w-20 h-20 rounded-full overflow-hidden border border-brass/50 flex items-center justify-center bg-navy-900 mt-3">
                         {row.unidade.imageUrl
-                          ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
-                          : <span className="font-black text-2xl text-orange-300">{fallbackAvatar(row.unidade.nome)}</span>
+                          ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-cover" />
+                          : <span className="font-display font-bold text-2xl text-brass-bright">{fallbackAvatar(row.unidade.nome)}</span>
                         }
                       </div>
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-lg font-black text-white leading-tight">{row.unidade.nome}</p>
-                      <p className="text-xs text-orange-300/70 mt-0.5">Ativa nesta semana</p>
-                      <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-orange-400/50 bg-orange-400/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-orange-300">
-                        <Zap size={9} className="fill-orange-400 text-orange-400" /> em chamas
+                      <p className="font-display text-xl font-bold uppercase tracking-wide text-parchment leading-tight">{row.unidade.nome}</p>
+                      <p className="text-xs text-brass/70 mt-0.5">Ativa nesta semana</p>
+                      <span className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-brass/50 bg-brass/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-brass-bright">
+                        <Zap size={9} className="fill-brass-bright text-brass-bright" /> acesa
                       </span>
                     </div>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           </section>
         )}
 
-        {/* Retângulo escuro com todas as unidades geladas */}
+        {/* Em descanso — geladas */}
         {coldRows.length > 0 && (
-          <section className="rounded-[28px] border border-white/8 bg-[#0B0A18]/80 p-5 sm:p-6">
+          <section className="rounded-[28px] border-2 border-dashed border-brass/12 bg-navy-800/70 p-5 sm:p-6 space-y-3">
+            <div className="flex items-center gap-3 px-1">
+              <span className="h-px flex-1 bg-white/5" />
+              <p className="text-[10px] uppercase tracking-[0.35em] font-bold text-slatemut/70 flex items-center gap-2">
+                <Snowflake size={11} /> Em descanso
+              </p>
+              <span className="h-px flex-1 bg-white/5" />
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {coldRows.map(row => (
                 <div
                   key={row.unidade.id}
-                  className="relative rounded-[20px] overflow-hidden border border-sky-900/30 bg-[linear-gradient(135deg,rgba(14,30,60,0.60),rgba(11,10,24,0.95))]"
+                  className="relative rounded-[20px] overflow-hidden border border-dashed border-white/10 bg-[linear-gradient(135deg,rgba(19,35,63,0.6),rgba(10,20,40,0.95))]"
                 >
                   <div className="relative flex flex-col items-center gap-3 p-4 pt-5">
-                    <div className="absolute top-2.5 right-2.5 text-sm leading-none select-none opacity-50">❄️</div>
+                    <div className="absolute top-2.5 right-2.5 text-sm leading-none select-none opacity-40">❄️</div>
 
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden border border-sky-900/40 flex items-center justify-center bg-black/30 opacity-50 grayscale">
+                    <div className="w-16 h-16 rounded-full overflow-hidden border border-white/10 flex items-center justify-center bg-navy-900 opacity-55 grayscale">
                       {row.unidade.imageUrl
-                        ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-contain" />
-                        : <span className="font-black text-xl text-sky-500">{fallbackAvatar(row.unidade.nome)}</span>
+                        ? <img src={row.unidade.imageUrl} alt={row.unidade.nome} className="w-full h-full object-cover" />
+                        : <span className="font-display font-bold text-xl text-slatemut">{fallbackAvatar(row.unidade.nome)}</span>
                       }
                     </div>
 
-                    <p className="text-xs font-black text-center leading-tight text-gray-500">{row.unidade.nome}</p>
+                    <p className="font-display text-sm font-bold uppercase tracking-wide text-center leading-tight text-slatemut">{row.unidade.nome}</p>
 
-                    <span className="flex items-center gap-1 rounded-full border border-sky-800/30 bg-sky-900/20 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-sky-600/70">
-                      <Snowflake size={8} /> gelada
+                    <span className="flex items-center gap-1 rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slatemut/70">
+                      <Snowflake size={8} /> descanso
                     </span>
                   </div>
                 </div>
@@ -1352,13 +1440,13 @@ const MainEngagementView: React.FC<MainEngagementViewProps> = ({
 
         {/* Nenhuma unidade ativa */}
         {hotRows.length === 0 && coldRows.length === 0 && (
-          <section className="rounded-[28px] border border-white/8 bg-[#0B0A18]/80 p-10 text-center text-gray-600 text-sm">
+          <section className="rounded-[28px] border-2 border-dashed border-brass/15 bg-navy-800/70 p-10 text-center text-slatemut text-sm">
             Nenhuma unidade cadastrada.
           </section>
         )}
 
-        <p className="text-center text-[10px] uppercase tracking-[0.3em] font-black text-gray-700 pb-6">
-          Super Unidades — Unidades em Movimento
+        <p className="text-center text-[10px] uppercase tracking-[0.3em] font-black text-brass/30 pb-6">
+          Super Unidades — Ordem do Mérito
         </p>
       </div>
     </div>
@@ -1493,8 +1581,8 @@ export const PublicRanking: React.FC = () => {
 
   if (!clubId) {
     return (
-      <div className="min-h-screen bg-[#050816] text-gray-200 flex items-center justify-center p-6">
-        <div className="max-w-lg rounded-[32px] border border-[#1F2937] bg-[#0B0F1A] p-8 text-center">
+      <div className="min-h-screen bg-[#0A1428] text-gray-200 flex items-center justify-center p-6">
+        <div className="max-w-lg rounded-[32px] border border-[#1B3052] bg-[#0A1428] p-8 text-center">
           <h1 className="text-3xl font-black">Ranking indisponível</h1>
           <p className="text-gray-400 mt-3">Abra este painel com um link contendo o clube no hash público.</p>
         </div>
@@ -1506,8 +1594,8 @@ export const PublicRanking: React.FC = () => {
   if (unitCode) {
     if (!unitFromCode) {
       return (
-        <div className="min-h-screen bg-[#050816] text-gray-200 flex items-center justify-center p-6">
-          <div className="max-w-lg rounded-[32px] border border-[#1F2937] bg-[#0B0F1A] p-8 text-center">
+        <div className="min-h-screen bg-[#0A1428] text-gray-200 flex items-center justify-center p-6">
+          <div className="max-w-lg rounded-[32px] border border-[#1B3052] bg-[#0A1428] p-8 text-center">
             <h1 className="text-3xl font-black">Código inválido</h1>
             <p className="text-gray-400 mt-3">Este link de unidade não é válido. Verifique com sua liderança.</p>
           </div>

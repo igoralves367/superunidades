@@ -1,8 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { LoadingScreen } from '../components/LoadingScreen';
 import * as fs from '../services/firestoreDb';
 import { Desbravador, RankingQuarter, RankingUnitProgressDoc, Reuniao, ReuniaoPresenca, Unidade } from '../types';
 import { computeEngagementRows } from '../services/engagement';
+
+// ---------------------------------------------------------------------------
+// Motion variants (Heritage — sutil, respeita prefers-reduced-motion)
+// ---------------------------------------------------------------------------
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
+};
+// Mobile: entrada com leve subida + fade
+const riseItem = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 24 } },
+};
+// Desktop (bracket): só fade — não move posição p/ não desalinhar os conectores SVG
+const fadeItem = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.45, ease: 'easeOut' } },
+};
 
 // ---------------------------------------------------------------------------
 // Route parsing
@@ -147,8 +166,8 @@ const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right'; compact?:
           ? `linear-gradient(135deg, rgba(${hexToRgb(config.color)},0.12) 0%, rgba(10,14,30,0.95) 100%)`
           : 'linear-gradient(135deg, rgba(15,20,40,0.95) 0%, rgba(8,12,24,0.98) 100%)',
         border: active
-          ? `1.5px solid rgba(${hexToRgb(config.color)},0.55)`
-          : '1.5px solid rgba(255,255,255,0.07)',
+          ? `1.5px dashed rgba(${hexToRgb(config.color)},0.6)`
+          : '1.5px dashed rgba(200,160,75,0.14)',
         boxShadow: active
           ? `0 0 20px -4px ${config.glow}, inset 0 0 20px -12px ${config.glow}`
           : '0 2px 8px rgba(0,0,0,0.4)',
@@ -191,12 +210,84 @@ const UnitCard: React.FC<{ data: UnitCardData; side: 'left' | 'right'; compact?:
 
       {/* Name */}
       <span
-        className="font-black tracking-wide truncate"
-        style={{ color: active ? '#FFFFFF' : '#6B7280', fontSize: compact ? 11 : 14 }}
+        className="font-display font-bold uppercase tracking-wide truncate"
+        style={{ color: active ? '#F2E9D8' : '#6B7280', fontSize: compact ? 12 : 15 }}
       >
         {unidade.nome}
       </span>
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Pitch card — vertical "jogador em campo" usado no layout mobile (Estádio Vertical)
+// ---------------------------------------------------------------------------
+const PitchCard: React.FC<{ data: UnitCardData }> = ({ data }) => {
+  const { unidade, hasMovement, config } = data;
+  const active = hasMovement;
+
+  return (
+    <motion.div
+      variants={riseItem}
+      whileHover={{ scale: 1.04 }}
+      whileTap={{ scale: 0.97 }}
+      className="relative flex flex-col items-center gap-2 rounded-[16px] px-2 py-3"
+      style={{
+        background: active
+          ? `linear-gradient(160deg, rgba(${hexToRgb(config.color)},0.14) 0%, rgba(10,20,40,0.95) 100%)`
+          : 'linear-gradient(160deg, rgba(15,25,48,0.9) 0%, rgba(8,14,28,0.96) 100%)',
+        border: active
+          ? `1.5px dashed rgba(${hexToRgb(config.color)},0.6)`
+          : '1.5px dashed rgba(200,160,75,0.14)',
+        boxShadow: active
+          ? `0 0 18px -4px ${config.glow}, inset 0 0 20px -12px ${config.glow}`
+          : '0 2px 8px rgba(0,0,0,0.4)',
+        opacity: active ? 1 : 0.5,
+        animation: active ? 'cardPulse 3s ease-in-out infinite' : 'none',
+      }}
+    >
+      {/* Status dot */}
+      <span
+        className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full"
+        style={{ background: active ? config.color : '#374151', boxShadow: active ? `0 0 6px ${config.color}` : 'none' }}
+      />
+
+      {/* Emblema (patch costurado) */}
+      <div className="patch-ring rounded-full" style={{ width: 46, height: 46 }}>
+        <div
+          className="w-full h-full rounded-full overflow-hidden flex items-center justify-center border-2"
+          style={{
+            borderColor: active ? `rgba(${hexToRgb(config.color)},0.7)` : 'rgba(200,160,75,0.25)',
+            background: active ? `rgba(${hexToRgb(config.color)},0.1)` : 'rgba(20,25,50,0.8)',
+            boxShadow: active ? `0 0 12px ${config.glow}` : 'none',
+          }}
+        >
+          {unidade.imageUrl ? (
+            <img src={unidade.imageUrl} alt={unidade.nome} className="w-full h-full object-cover" />
+          ) : (
+            <span style={{ fontSize: 15, fontWeight: 900, color: active ? config.color : '#6B7280' }}>
+              {unidade.nome.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Nome */}
+      <span
+        className="font-display font-bold uppercase tracking-wide text-center leading-tight truncate w-full"
+        style={{ color: active ? '#F2E9D8' : '#6B7280', fontSize: 13 }}
+      >
+        {unidade.nome}
+      </span>
+
+      {/* Status — termo de futebol */}
+      <span
+        className="text-[8px] font-black uppercase tracking-[0.2em]"
+        style={{ color: active ? config.color : '#4B5563' }}
+      >
+        {active ? 'Em campo' : 'No banco'}
+      </span>
+    </motion.div>
   );
 };
 
@@ -365,6 +456,9 @@ function hexToRgb(hex: string): string {
 // ---------------------------------------------------------------------------
 export const PublicRodada: React.FC = () => {
   const routeValue = getClubValue();
+  const reduce = useReducedMotion();
+  const motionStart = reduce ? undefined : 'hidden';
+  const motionShow = reduce ? undefined : 'show';
 
   const [loading, setLoading] = useState(true);
   const [clubId, setClubId] = useState('');
@@ -374,12 +468,11 @@ export const PublicRodada: React.FC = () => {
   const [progressDocs, setProgressDocs] = useState<RankingUnitProgressDoc[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Desktop bracket usa refs + SVG connectors. O mobile (Estádio Vertical) não precisa.
   const containerRef = React.useRef<HTMLDivElement>(null);
   const trophyRef = React.useRef<HTMLDivElement>(null);
-  const mobileContainerRef = React.useRef<HTMLDivElement>(null);
-  const mobileTrophyRef = React.useRef<HTMLDivElement>(null);
 
-  // Create stable refs for up to 4 cards on each side (desktop + mobile)
+  // Create stable refs for up to 4 cards on each side (desktop)
   const leftRefs = [
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
@@ -387,18 +480,6 @@ export const PublicRodada: React.FC = () => {
     React.useRef<HTMLDivElement>(null),
   ];
   const rightRefs = [
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-  ];
-  const mobileLeftRefs = [
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-    React.useRef<HTMLDivElement>(null),
-  ];
-  const mobileRightRefs = [
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
     React.useRef<HTMLDivElement>(null),
@@ -455,11 +536,8 @@ export const PublicRodada: React.FC = () => {
 
     loadData();
 
-    // Poll every 30s
-    const iv = window.setInterval(loadData, 30_000);
     return () => {
       cancelled = true;
-      window.clearInterval(iv);
     };
   }, [routeValue]);
 
@@ -512,10 +590,10 @@ export const PublicRodada: React.FC = () => {
 
   if (errorMsg || !clubId) {
     return (
-      <div className="min-h-screen bg-[#050B1A] flex items-center justify-center p-6">
-        <div className="rounded-[24px] border border-white/10 bg-[#0B0F1A] p-8 text-center max-w-md">
-          <p className="text-2xl font-black text-white mb-2">Painel indisponível</p>
-          <p className="text-gray-400">{errorMsg || 'Abra com um link contendo o slug do clube.'}</p>
+      <div className="min-h-screen heritage-bg flex items-center justify-center p-6">
+        <div className="stitch-card rounded-[24px] p-8 text-center max-w-md">
+          <p className="font-display text-2xl font-bold uppercase tracking-wide text-parchment mb-2">Painel indisponível</p>
+          <p className="text-slatemut">{errorMsg || 'Abra com um link contendo o slug do clube.'}</p>
         </div>
       </div>
     );
@@ -560,9 +638,9 @@ export const PublicRodada: React.FC = () => {
       `}</style>
 
       <div
-        className="min-h-screen text-white overflow-hidden"
+        className="min-h-screen text-parchment overflow-hidden font-inter"
         style={{
-          background: 'radial-gradient(ellipse at 50% 0%, rgba(0,40,100,0.4) 0%, transparent 60%), linear-gradient(180deg, #050916 0%, #060B1C 40%, #040810 100%)',
+          background: 'radial-gradient(ellipse at 50% 0%, rgba(200,160,75,0.16) 0%, transparent 60%), linear-gradient(180deg, #0A1428 0%, #0E1B33 45%, #081020 100%)',
         }}
       >
         {/* ── CAMPO DE FUTEBOL — fundo quase imperceptível ── */}
@@ -612,7 +690,7 @@ export const PublicRodada: React.FC = () => {
         <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
           <div
             className="bg-pulse absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full"
-            style={{ background: 'radial-gradient(ellipse, rgba(255,214,10,0.06) 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(ellipse, rgba(228,195,92,0.08) 0%, transparent 70%)' }}
           />
           <div
             className="bg-pulse absolute top-1/2 left-0 w-[300px] h-[400px] -translate-y-1/2 -translate-x-1/2 rounded-full"
@@ -637,16 +715,16 @@ export const PublicRodada: React.FC = () => {
             <div
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest"
               style={{
-                background: 'rgba(255,214,10,0.08)',
-                border: '1px solid rgba(255,214,10,0.25)',
-                color: '#FFD60A',
+                background: 'rgba(200,160,75,0.10)',
+                border: '1px dashed rgba(200,160,75,0.35)',
+                color: '#E4C35C',
                 width: 110,
                 justifyContent: 'center',
               }}
             >
               <span
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: '#FFD60A', boxShadow: '0 0 5px #FFD60A', animation: 'dotBlink 2s ease-in-out infinite' }}
+                style={{ background: '#E4C35C', boxShadow: '0 0 5px #E4C35C', animation: 'dotBlink 2s ease-in-out infinite' }}
               />
               Semana Atual
             </div>
@@ -654,11 +732,12 @@ export const PublicRodada: React.FC = () => {
 
           {/* ── TITLE ── */}
           <div className="text-center py-2 px-4">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-none">
+            <p className="text-[10px] uppercase tracking-[0.45em] font-bold text-brass/70 mb-1.5">Clubão · Ordem do Mérito</p>
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold uppercase tracking-wide leading-none">
               RODADA DAS{' '}
               <span
                 style={{
-                  background: 'linear-gradient(90deg, #FFD60A, #FFA500, #FFD60A)',
+                  background: 'linear-gradient(90deg, #C8A04B, #E4C35C, #C8A04B)',
                   backgroundSize: '200% auto',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
@@ -677,10 +756,10 @@ export const PublicRodada: React.FC = () => {
 
               {/* Column labels */}
               <div className="flex justify-between mb-4 px-2">
-                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-gray-500">
+                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-brass/60">
                   Unidades Femininas
                 </p>
-                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-gray-500">
+                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-brass/60">
                   Unidades Masculinas
                 </p>
               </div>
@@ -689,11 +768,11 @@ export const PublicRodada: React.FC = () => {
               <div className="flex items-center gap-4" style={{ position: 'relative', zIndex: 2 }}>
 
                 {/* Left column */}
-                <div className="flex flex-col gap-4 flex-shrink-0" style={{ width: 240 }}>
+                <motion.div className="flex flex-col gap-4 flex-shrink-0" style={{ width: 240 }} variants={staggerContainer} initial={motionStart} animate={motionShow}>
                   {leftCards.map((card, i) => (
-                    <div key={card.unidade.id} ref={leftRefs[i] as React.RefObject<HTMLDivElement>}>
+                    <motion.div key={card.unidade.id} ref={leftRefs[i] as React.RefObject<HTMLDivElement>} variants={fadeItem}>
                       <UnitCard data={card} side="left" />
-                    </div>
+                    </motion.div>
                   ))}
                   {/* Placeholders for missing units */}
                   {Array.from({ length: Math.max(0, 4 - leftCards.length) }).map((_, i) => (
@@ -703,7 +782,7 @@ export const PublicRodada: React.FC = () => {
                       style={{ border: '1px dashed rgba(255,255,255,0.05)' }}
                     />
                   ))}
-                </div>
+                </motion.div>
 
                 {/* Center — trophy */}
                 <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: 320 }}>
@@ -717,8 +796,8 @@ export const PublicRodada: React.FC = () => {
                     <div
                       className="trophy-glow-ring absolute inset-0 rounded-[32px]"
                       style={{
-                        background: 'radial-gradient(ellipse at center, rgba(255,214,10,0.12) 0%, transparent 70%)',
-                        boxShadow: '0 0 60px -10px rgba(255,214,10,0.3)',
+                        background: 'radial-gradient(ellipse at center, rgba(228,195,92,0.14) 0%, transparent 70%)',
+                        boxShadow: '0 0 60px -10px rgba(228,195,92,0.35)',
                       }}
                     />
 
@@ -726,8 +805,8 @@ export const PublicRodada: React.FC = () => {
                     <div
                       className="absolute inset-0 rounded-[24px]"
                       style={{
-                        background: 'linear-gradient(160deg, rgba(40,30,5,0.6) 0%, rgba(10,10,20,0.7) 100%)',
-                        border: '1.5px solid rgba(255,214,10,0.2)',
+                        background: 'linear-gradient(160deg, rgba(40,30,5,0.55) 0%, rgba(10,20,40,0.75) 100%)',
+                        border: '1.5px dashed rgba(200,160,75,0.3)',
                         backdropFilter: 'blur(4px)',
                       }}
                     />
@@ -759,8 +838,8 @@ export const PublicRodada: React.FC = () => {
                   {/* Quarter label abaixo do troféu */}
                   <div className="mt-3 flex items-center gap-1.5" style={{ zIndex: 2 }}>
                     <span
-                      className="text-[11px] font-black uppercase tracking-[0.25em]"
-                      style={{ color: 'rgba(255,214,10,0.6)' }}
+                      className="font-display text-[13px] font-bold uppercase tracking-[0.3em]"
+                      style={{ color: 'rgba(228,195,92,0.8)' }}
                     >
                       2º Trimestre
                     </span>
@@ -768,11 +847,11 @@ export const PublicRodada: React.FC = () => {
                 </div>
 
                 {/* Right column */}
-                <div className="flex flex-col gap-4 flex-shrink-0" style={{ width: 240 }}>
+                <motion.div className="flex flex-col gap-4 flex-shrink-0" style={{ width: 240 }} variants={staggerContainer} initial={motionStart} animate={motionShow}>
                   {rightCards.map((card, i) => (
-                    <div key={card.unidade.id} ref={rightRefs[i] as React.RefObject<HTMLDivElement>}>
+                    <motion.div key={card.unidade.id} ref={rightRefs[i] as React.RefObject<HTMLDivElement>} variants={fadeItem}>
                       <UnitCard data={card} side="right" />
-                    </div>
+                    </motion.div>
                   ))}
                   {Array.from({ length: Math.max(0, 4 - rightCards.length) }).map((_, i) => (
                     <div
@@ -781,7 +860,7 @@ export const PublicRodada: React.FC = () => {
                       style={{ border: '1px dashed rgba(255,255,255,0.05)' }}
                     />
                   ))}
-                </div>
+                </motion.div>
               </div>
 
               {/* SVG connector lines drawn on top of everything */}
@@ -796,96 +875,99 @@ export const PublicRodada: React.FC = () => {
             </div>
           </div>
 
-          {/* ── MOBILE LAYOUT ── mesmo bracket do desktop, compacto ── */}
-          <div className="flex md:hidden flex-1 items-center justify-center px-3 py-2">
-            <div className="relative w-full" ref={mobileContainerRef}>
+          {/* ── MOBILE LAYOUT — Estádio Vertical (campo em pé) ── */}
+          <div className="flex md:hidden flex-1 flex-col items-center px-3 pb-8">
 
-              {/* Column labels */}
-              <div className="flex justify-between mb-3 px-1">
-                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500">Femininas</p>
-                <p className="text-[8px] uppercase tracking-[0.3em] font-black text-gray-500">Masculinas</p>
+            {/* Taça da rodada — jumbotron no topo */}
+            <motion.div
+              className="relative flex flex-col items-center mt-1 mb-5"
+              initial={reduce ? false : { opacity: 0, scale: 0.8 }}
+              animate={reduce ? undefined : { opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 18, delay: 0.1 }}
+            >
+              <div className="relative flex items-center justify-center" style={{ width: 122, height: 132 }}>
+                <div
+                  className="trophy-glow-ring absolute inset-0 rounded-[28px]"
+                  style={{
+                    background: 'radial-gradient(ellipse at center, rgba(228,195,92,0.16) 0%, transparent 70%)',
+                    boxShadow: '0 0 50px -10px rgba(228,195,92,0.4)',
+                  }}
+                />
+                <div
+                  className="absolute inset-0 rounded-[22px]"
+                  style={{
+                    background: 'linear-gradient(160deg, rgba(40,30,5,0.55) 0%, rgba(10,20,40,0.75) 100%)',
+                    border: '1.5px dashed rgba(200,160,75,0.3)',
+                    backdropFilter: 'blur(4px)',
+                  }}
+                />
+                <div className="absolute inset-0 flex items-start justify-center pointer-events-none" style={{ paddingTop: 12 }}>
+                  <img
+                    src="/logo.png"
+                    alt=""
+                    style={{ width: 100, height: 100, objectFit: 'contain', opacity: 0.2, filter: 'blur(0.3px) saturate(0.6)' }}
+                  />
+                </div>
+                <div className="relative trophy-container" style={{ width: 46, height: 64, zIndex: 2, marginTop: 40 }}>
+                  <TrophySVG glow />
+                </div>
               </div>
+              <span className="font-display text-[12px] font-bold uppercase tracking-[0.3em] mt-1.5" style={{ color: 'rgba(228,195,92,0.85)' }}>
+                Taça da Rodada
+              </span>
+            </motion.div>
 
-              {/* Three-column: left | trophy | right */}
-              <div className="flex items-center gap-2" style={{ position: 'relative', zIndex: 2 }}>
+            {/* Campo vertical (pitch) */}
+            <div
+              className="relative w-full max-w-sm rounded-[24px] overflow-hidden"
+              style={{
+                border: '1.5px dashed rgba(200,160,75,0.22)',
+                background: 'linear-gradient(180deg, rgba(13,30,24,0.55) 0%, rgba(10,20,40,0.85) 100%)',
+              }}
+            >
+              {/* Linhas do campo — em latão, sutil */}
+              <svg
+                viewBox="0 0 300 600"
+                preserveAspectRatio="none"
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                style={{ opacity: 0.13 }}
+              >
+                <rect x="10" y="10" width="280" height="580" rx="8" fill="none" stroke="#C8A04B" strokeWidth="1.5" />
+                <line x1="10" y1="300" x2="290" y2="300" stroke="#C8A04B" strokeWidth="1.5" />
+                <circle cx="150" cy="300" r="48" fill="none" stroke="#C8A04B" strokeWidth="1.5" />
+                <circle cx="150" cy="300" r="3" fill="#C8A04B" />
+                <rect x="90" y="10" width="120" height="58" fill="none" stroke="#C8A04B" strokeWidth="1.5" />
+                <rect x="90" y="532" width="120" height="58" fill="none" stroke="#C8A04B" strokeWidth="1.5" />
+              </svg>
 
-                {/* Left column */}
-                <div className="flex flex-col gap-3 flex-shrink-0" style={{ width: 115 }}>
-                  {leftCards.map((card, i) => (
-                    <div key={card.unidade.id} ref={mobileLeftRefs[i] as React.RefObject<HTMLDivElement>}>
-                      <UnitCard data={card} side="left" compact />
-                    </div>
-                  ))}
+              <div className="relative p-4 space-y-3">
+                {/* Meio-campo de cima — Femininas */}
+                <p className="text-center text-[9px] uppercase tracking-[0.35em] font-black text-brass/60">Unidades Femininas</p>
+                <motion.div className="grid grid-cols-2 gap-3" variants={staggerContainer} initial={motionStart} animate={motionShow}>
+                  {leftCards.map(card => <PitchCard key={card.unidade.id} data={card} />)}
                   {Array.from({ length: Math.max(0, 4 - leftCards.length) }).map((_, i) => (
-                    <div key={`ph-ml-${i}`} className="h-[44px] rounded-[10px]" style={{ border: '1px dashed rgba(255,255,255,0.05)' }} />
+                    <div key={`ph-fl-${i}`} className="h-[112px] rounded-[16px]" style={{ border: '1px dashed rgba(255,255,255,0.06)' }} />
                   ))}
+                </motion.div>
+
+                {/* Linha do meio-campo */}
+                <div className="flex items-center gap-3 py-1.5">
+                  <span className="h-px flex-1" style={{ background: 'repeating-linear-gradient(90deg, rgba(200,160,75,0.45) 0 6px, transparent 6px 12px)' }} />
+                  <span className="font-display text-[11px] font-bold uppercase tracking-[0.25em] whitespace-nowrap" style={{ color: 'rgba(228,195,92,0.8)' }}>
+                    2º Trimestre
+                  </span>
+                  <span className="h-px flex-1" style={{ background: 'repeating-linear-gradient(90deg, rgba(200,160,75,0.45) 0 6px, transparent 6px 12px)' }} />
                 </div>
 
-                {/* Center — trophy */}
-                <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: 260 }}>
-                  <div
-                    className="relative flex items-center justify-center"
-                    ref={mobileTrophyRef}
-                    style={{ width: 100, height: 116, zIndex: 2 }}
-                  >
-                    <div
-                      className="trophy-glow-ring absolute inset-0 rounded-[20px]"
-                      style={{
-                        background: 'radial-gradient(ellipse at center, rgba(255,214,10,0.12) 0%, transparent 70%)',
-                        boxShadow: '0 0 40px -8px rgba(255,214,10,0.3)',
-                      }}
-                    />
-                    <div
-                      className="absolute inset-0 rounded-[18px]"
-                      style={{
-                        background: 'linear-gradient(160deg, rgba(40,30,5,0.6) 0%, rgba(10,10,20,0.7) 100%)',
-                        border: '1.5px solid rgba(255,214,10,0.2)',
-                        backdropFilter: 'blur(4px)',
-                      }}
-                    />
-                    <div
-                      className="absolute inset-0 flex items-start justify-center pointer-events-none"
-                      style={{ zIndex: 1, paddingTop: 8 }}
-                    >
-                      <img
-                        src="/logo.png"
-                        alt=""
-                        style={{ width: 84, height: 84, objectFit: 'contain', opacity: 0.22, filter: 'blur(0.3px) saturate(0.6)' }}
-                      />
-                    </div>
-                    <div className="relative trophy-container" style={{ width: 38, height: 52, zIndex: 2, marginTop: 32 }}>
-                      <TrophySVG glow />
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center gap-1" style={{ zIndex: 2 }}>
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em]" style={{ color: 'rgba(255,214,10,0.6)' }}>
-                      2º Trimestre
-                    </span>
-                  </div>
-                </div>
-
-                {/* Right column */}
-                <div className="flex flex-col gap-3 flex-shrink-0" style={{ width: 115 }}>
-                  {rightCards.map((card, i) => (
-                    <div key={card.unidade.id} ref={mobileRightRefs[i] as React.RefObject<HTMLDivElement>}>
-                      <UnitCard data={card} side="right" compact />
-                    </div>
-                  ))}
+                {/* Meio-campo de baixo — Masculinas */}
+                <motion.div className="grid grid-cols-2 gap-3" variants={staggerContainer} initial={motionStart} animate={motionShow}>
+                  {rightCards.map(card => <PitchCard key={card.unidade.id} data={card} />)}
                   {Array.from({ length: Math.max(0, 4 - rightCards.length) }).map((_, i) => (
-                    <div key={`ph-mr-${i}`} className="h-[44px] rounded-[10px]" style={{ border: '1px dashed rgba(255,255,255,0.05)' }} />
+                    <div key={`ph-mr2-${i}`} className="h-[112px] rounded-[16px]" style={{ border: '1px dashed rgba(255,255,255,0.06)' }} />
                   ))}
-                </div>
+                </motion.div>
+                <p className="text-center text-[9px] uppercase tracking-[0.35em] font-black text-brass/60">Unidades Masculinas</p>
               </div>
-
-              {/* Connector lines mobile */}
-              <Connectors
-                leftCards={leftCards}
-                rightCards={rightCards}
-                leftRefs={mobileLeftRefs as React.RefObject<HTMLDivElement>[]}
-                rightRefs={mobileRightRefs as React.RefObject<HTMLDivElement>[]}
-                trophyRef={mobileTrophyRef}
-                containerRef={mobileContainerRef}
-              />
             </div>
           </div>
 

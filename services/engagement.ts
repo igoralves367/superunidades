@@ -87,7 +87,9 @@ export const computeEngagementRows = (input: EngagementInput): EngagementRow[] =
   return input.units
     .map(unit => ({
       unidade: unit,
-      hasMovement: hasActivityThisWeek(unit, input, weekStart)
+      hasMovement: unit.manualMovimentoSemana != null
+        ? unit.manualMovimentoSemana
+        : hasActivityThisWeek(unit, input, weekStart)
     }))
     .sort((a, b) => a.unidade.nome.localeCompare(b.unidade.nome, 'pt-BR'));
 };

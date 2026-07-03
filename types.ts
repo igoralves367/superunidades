@@ -84,6 +84,8 @@ export interface Unidade {
   participatesClubao?: boolean;
   imageUrl?: string;
   sgcLink?: string;
+  // Controle manual de movimentação semanal no ranking público. null/undefined = automático (baseado em atividade real).
+  manualMovimentoSemana?: boolean | null;
 }
 
 export interface Classe {

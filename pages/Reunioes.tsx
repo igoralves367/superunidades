@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, CalendarClock, Plus, Save, Clock, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 const MEETING_TYPES = ['Reunião Regular', 'Capelania', 'Evento', 'Visita', 'Outros'] as const;
 import { Usuario, Reuniao, Cargo } from '../types';
@@ -198,13 +199,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="py-20 flex justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" size={32} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   const publicLink = `${window.location.origin}/#agenda/${clubSlug}`;
   const trimestres = [1, 2, 3] as const;
@@ -370,9 +365,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
           </div>
 
           {isSummaryLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="animate-spin text-[#E53935]" size={32} />
-            </div>
+            <LoadingScreen inline />
           ) : summaryData && summaryData.length > 0 ? (
             <>
               {totalMeetingsSummary === 0 ? (
@@ -618,9 +611,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
       {/* Modal Relatorio */}
       <Modal isOpen={!!reportReuniao} onClose={() => setReportReuniao(null)} title="Relatório de Frequência">
         {isReportLoading || !reportData ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="animate-spin text-[#E53935]" size={32} />
-          </div>
+          <LoadingScreen inline />
         ) : (
           <div className="space-y-4">
             <h4 className="text-xl font-black text-white">{reportReuniao?.titulo || 'Reunião'} - {reportReuniao?.data.split('-').reverse().join('/')}</h4>

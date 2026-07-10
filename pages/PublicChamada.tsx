@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, CalendarClock, ChevronDown, ChevronUp, UserX, UserCheck, ArrowLeft } from 'lucide-react';
+import { CalendarClock, ChevronDown, ChevronUp, UserX, UserCheck, ArrowLeft } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { Unidade, Desbravador, Cargo, Classe, Reuniao, ReuniaoPresenca } from '../types';
 import * as fs from '../services/firestoreDb';
 import { formatarCargo } from './Membros';
@@ -178,17 +179,7 @@ export const PublicChamada: React.FC = () => {
     }
   };
 
-  if (loading && !clubeId) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#050816] space-y-4">
-        <div className="relative">
-          <div className="absolute inset-0 bg-[#E53935] rounded-full blur-xl opacity-20 pointer-events-none" />
-          <Loader2 className="animate-spin text-[#E53935] relative" size={48} />
-        </div>
-        <p className="text-[10px] uppercase font-black tracking-[0.2em] text-gray-500 animate-pulse">Carregando Agenda...</p>
-      </div>
-    );
-  }
+  if (loading && !clubeId) return <LoadingScreen inline />;
 
   if (errorInfo) {
     return (

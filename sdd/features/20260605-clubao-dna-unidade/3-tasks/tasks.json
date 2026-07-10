@@ -1,0 +1,159 @@
+{
+  "feature": "clubao-dna-unidade",
+  "execution_strategy": "batched",
+  "stats": {
+    "total": 8,
+    "done": 8,
+    "by_layer": { "1": 4, "2": 1, "3": 3 }
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Adicionar tipo UnitDnaData em types.ts",
+      "description": "Criar a interface UnitDnaData no final de types.ts com os campos dos 3 indicadores (ranking, frequência, classes), incluindo os estados nulos. Não modificar tipos existentes.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": [],
+      "files": ["types.ts"],
+      "acceptance_criteria": [
+        "AC-1: Interface UnitDnaData exportada com todos os campos do spec técnico",
+        "AC-2: Campos nuláveis tipados como number | null",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-002",
+      "title": "Criar componente DnaIndicatorCard",
+      "description": "Card de apresentação reutilizável que exibe título, valor percentual, descrição, estrelas opcionais e estado vazio/loading. Sem lógica de dados — puramente apresentacional (props in).",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": ["TASK-001"],
+      "files": ["components/UnitDna/DnaIndicatorCard.tsx"],
+      "acceptance_criteria": [
+        "AC-1: Renderiza value como percentual quando não-nulo",
+        "AC-2: Exibe emptyMessage quando value === null",
+        "AC-3: Renderiza estrelas quando prop stars fornecida",
+        "AC-4: Suporta estado loading",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1", "US-2"],
+      "design_decisions": ["DD-4"]
+    },
+    {
+      "id": "TASK-003",
+      "title": "Implementar lógica pura de cálculo de classes",
+      "description": "Função pura que recebe desbravadores da unidade, requisitos e progressos, e retorna { classesAvgPercent, classesCompletedCount, classesMemberCount }. Ignora desbravadores sem classeId. 'Concluído' = 100% dos requisitos da classe atual.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-001"],
+      "files": ["components/UnitDna/dnaClasses.ts"],
+      "acceptance_criteria": [
+        "AC-1: Calcula média dos percentuais individuais de classe",
+        "AC-2: Ignora desbravadores sem classeId",
+        "AC-3: classesAvgPercent === null quando nenhum desbravador tem classe",
+        "AC-4: classesCompletedCount conta desbravadores com 100%",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-4"],
+      "design_decisions": ["DD-3"]
+    },
+    {
+      "id": "TASK-004",
+      "title": "Implementar UnitDnaPanel (carregamento + composição)",
+      "description": "Componente principal: identifica a unidade (user.unidadeId ou override), carrega em paralelo os dados do trimestre ativo, deriva os 3 indicadores reaproveitando buildRankingRows e buildFrequencySummary, e renderiza os DnaIndicatorCard. Trata todos os estados vazios do spec funcional.",
+      "status": "done",
+      "layer": 2,
+      "complexity": "High",
+      "depends_on": ["TASK-002", "TASK-003"],
+      "files": ["components/UnitDna/UnitDnaPanel.tsx"],
+      "acceptance_criteria": [
+        "AC-1: Usa user.unidadeId; aceita unidadeIdOverride para Diretoria",
+        "AC-2: Seleciona quarter ativo com a mesma lógica do Portal (ACTIVE → CLOSED → ativo)",
+        "AC-3: Mapeia activeQuarter.number como trimestre para buildFrequencySummary",
+        "AC-4: Reaproveita buildRankingRows (progressPercent) e buildFrequencySummary (unitFrequencyPct)",
+        "AC-5: Exibe aviso quando sem unidade vinculada / sem trimestre ativo / sem reuniões",
+        "AC-6: Todas as queries usam user.clubeId",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1", "US-2", "US-3", "US-4"],
+      "design_decisions": ["DD-1", "DD-2", "DD-5"]
+    },
+    {
+      "id": "TASK-005",
+      "title": "Registrar tab dna-unidade em App.tsx e Sidebar",
+      "description": "Adicionar import de UnitDnaPanel e case 'dna-unidade' no switch de App.tsx passando user. Adicionar item de navegação 'DNA da Unidade' no Sidebar visível para CONSELHEIRO e DIRETORIA.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Low",
+      "depends_on": ["TASK-004"],
+      "files": ["App.tsx", "components/Sidebar.tsx"],
+      "acceptance_criteria": [
+        "AC-1: case 'dna-unidade' renderiza UnitDnaPanel com user",
+        "AC-2: Item de nav visível apenas para CONSELHEIRO e DIRETORIA",
+        "GATE: npx tsc --noEmit passa sem erros"
+      ],
+      "references": ["US-1"],
+      "design_decisions": ["DD-5"]
+    },
+    {
+      "id": "TASK-006",
+      "title": "Testes unitários (vitest)",
+      "description": "Testar a lógica pura: cálculo de estrelas (limiares 0.6/0.8), cálculo de média de classes, exclusão de desbravadores sem classeId, estados vazios (null). Meta 60% de cobertura da lógica pura.",
+      "status": "done",
+      "layer": 1,
+      "complexity": "Medium",
+      "depends_on": ["TASK-003", "TASK-004"],
+      "files": ["components/UnitDna/dnaClasses.test.ts"],
+      "acceptance_criteria": [
+        "AC-1: Estrelas: 0.80→5, 0.79→4, 0.60→4, 0.59→3",
+        "AC-2: Média de classes correta com desbravadores variados",
+        "AC-3: Desbravador sem classeId ignorado",
+        "AC-4: Estado vazio retorna null",
+        "GATE: npx vitest run passa"
+      ],
+      "references": ["US-2", "US-4"],
+      "design_decisions": ["DD-3", "DD-4"]
+    },
+    {
+      "id": "TASK-007",
+      "title": "Code review (sdd-code-reviewer)",
+      "description": "Revisão de qualidade do código da feature: aderência aos padrões do projeto, ausência de any implícito, nomenclatura, reuso correto das funções puras.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-005", "TASK-006"],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Sem any implícito no código da feature",
+        "AC-2: Reuso de ranking.ts e frequencia.ts sem duplicação de lógica",
+        "GATE: sdd-code-reviewer sem issues bloqueantes"
+      ],
+      "references": [],
+      "design_decisions": []
+    },
+    {
+      "id": "TASK-008",
+      "title": "Performance e Security review",
+      "description": "Verificar: queries Firestore com clubeId, ausência de secrets hardcoded, soft delete via status==='ATIVO', N queries paralelas de progresso aceitáveis (Promise.all), sem re-renders desnecessários.",
+      "status": "done",
+      "layer": 3,
+      "complexity": "Low",
+      "depends_on": ["TASK-005", "TASK-006"],
+      "files": [],
+      "acceptance_criteria": [
+        "AC-1: Todas as queries usam user.clubeId (multi-tenant)",
+        "AC-2: Sem secrets hardcoded",
+        "AC-3: Desbravadores filtrados por status==='ATIVO'",
+        "AC-4: Promise.all usado para queries de progresso (sem cascata sequencial)",
+        "GATE: nenhuma falha de segurança crítica"
+      ],
+      "references": [],
+      "design_decisions": ["DD-2"]
+    }
+  ]
+}

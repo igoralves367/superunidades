@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, CheckCircle2, Circle, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { NeonCard } from '../components/NeonCard';
 import { Badge } from '../components/Badge';
 import { Usuario, Desbravador, Requisito, Classe, PerfilAcesso } from '../types';
@@ -107,12 +108,7 @@ export const Progresso: React.FC<ProgressoProps> = ({ user }) => {
     return Math.round((done / classReqs.length) * 100);
   }, [classReqs, selectedProgress]);
 
-  if (loading) return (
-    <div className="py-20 flex flex-col items-center justify-center">
-      <Loader2 className="animate-spin text-[#E53935]" size={40} />
-      <p className="text-gray-500 font-bold uppercase text-[10px] mt-4 tracking-widest">Acessando Nuvem...</p>
-    </div>
-  );
+  if (loading) return <LoadingScreen inline />;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-10">

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Save, Wrench, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { Modal } from '../components/Modal';
 import { Usuario, Desbravador, FanfarraInstrumento, FanfarraTipoInstrumento, FanfarraTamanhoInstrumento, FanfarraStatusInstrumento } from '../types';
 import * as fs from '../services/firestoreDb';
@@ -165,13 +166,7 @@ export const Fanfarra: React.FC<FanfarraProps> = ({ user }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="py-20 flex justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" size={32} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   const publicLink = `${window.location.origin}${window.location.pathname}#fanfacoes/${encodeURIComponent(publicSlug || user.clubeId)}`;
 

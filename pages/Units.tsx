@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Edit3, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Edit3, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import { useAuth } from '../store/AuthContext';
 import { Unidade } from '../types';
 import * as fs from '../services/firestoreDb';
+import { UnitDnaPanel } from '../components/UnitDna/UnitDnaPanel';
 
 const defaultForm = {
   nome: '',
@@ -10,6 +12,7 @@ const defaultForm = {
   ordem: 1,
   participatesClubao: true,
   imageUrl: '',
+  sgcLink: '',
   ativo: true
 };
 
@@ -22,6 +25,7 @@ export const Units: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unidade | null>(null);
   const [form, setForm] = useState(defaultForm);
+  const [expandedProgressId, setExpandedProgressId] = useState<string | null>(null);
 
   const loadUnits = async () => {
     if (!clubId) return;
@@ -39,7 +43,7 @@ export const Units: React.FC = () => {
   }, [clubId]);
 
   const filteredUnits = useMemo(
-    () => units.filter(unit => showInactive || unit.ativo).filter(unit => unit.tipo !== 'DIRETORIA'),
+    () => units.filter(unit => showInactive || unit.ativo),
     [units, showInactive]
   );
 
@@ -57,6 +61,7 @@ export const Units: React.FC = () => {
       ordem: unit.ordem || 1,
       participatesClubao: unit.participatesClubao ?? true,
       imageUrl: unit.imageUrl || '',
+      sgcLink: unit.sgcLink || '',
       ativo: unit.ativo
     });
     setIsModalOpen(true);
@@ -123,41 +128,60 @@ export const Units: React.FC = () => {
       </header>
 
       {loading ? (
-        <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-[#E53935]" /></div>
+        <LoadingScreen inline />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredUnits.map(unit => (
-            <div key={unit.id} className={`rounded-[28px] border p-5 bg-[#111827] ${unit.ativo ? 'border-[#1F2937]' : 'border-[#374151] opacity-60 grayscale'}`}>
-              <div className="flex justify-between items-start gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-black text-white">{unit.nome}</h3>
-                    {!unit.ativo && <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-red-500/10 text-red-300">Inativa</span>}
+          {filteredUnits.map(unit => {
+            const isExpanded = expandedProgressId === unit.id;
+            return (
+              <div key={unit.id} className={`rounded-[28px] border bg-[#111827] ${unit.ativo ? 'border-[#1F2937]' : 'border-[#374151] opacity-60 grayscale'} ${isExpanded ? 'col-span-full' : ''}`}>
+                <div className="p-5">
+                  <div className="flex justify-between items-start gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xl font-black text-white">{unit.nome}</h3>
+                        {!unit.ativo && <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-red-500/10 text-red-300">Inativa</span>}
+                      </div>
+                      <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-2">{unit.tipo}</p>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(unit)} className="p-2 text-gray-500 hover:text-[#00B2FF] hover:bg-[#00B2FF]/10 rounded-lg">
+                        <Edit3 size={16} />
+                      </button>
+                      <button onClick={() => handleDelete(unit.id)} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-2">{unit.tipo}</p>
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openEdit(unit)} className="p-2 text-gray-500 hover:text-[#00B2FF] hover:bg-[#00B2FF]/10 rounded-lg">
-                    <Edit3 size={16} />
-                  </button>
-                  <button onClick={() => handleDelete(unit.id)} className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
 
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">Ordem</span>
-                  <span className="font-bold text-white">{unit.ordem || '-'}</span>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500">Ordem</span>
+                      <span className="font-bold text-white">{unit.ordem || '-'}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-500">Participa do Clubão</span>
+                      <span className="font-bold text-white">{unit.participatesClubao === false ? 'Não' : 'Sim'}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setExpandedProgressId(isExpanded ? null : unit.id)}
+                    className="mt-4 w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#0B0F1A] border border-[#1F2937] text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white hover:border-[#22D3EE]/40 transition-all"
+                  >
+                    <span>Progresso</span>
+                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
                 </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-gray-500">Participa do Clubão</span>
-                  <span className="font-bold text-white">{unit.participatesClubao === false ? 'Não' : 'Sim'}</span>
-                </div>
+
+                {isExpanded && currentUser != null && (
+                  <div className="border-t border-[#1F2937] px-5 pb-6 pt-5">
+                    <UnitDnaPanel user={currentUser} unidadeIdOverride={unit.id} embedded />
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {filteredUnits.length === 0 && (
             <div className="col-span-full rounded-[28px] border border-dashed border-[#1F2937] p-10 text-center text-gray-500">
@@ -221,6 +245,16 @@ export const Units: React.FC = () => {
                     onChange={e => setForm(prev => ({ ...prev, imageUrl: e.target.value }))}
                     className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-4 text-sm font-bold"
                     placeholder="https://..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-500 uppercase font-black tracking-widest ml-1">Link SGC (opcional)</label>
+                  <input
+                    value={form.sgcLink}
+                    onChange={e => setForm(prev => ({ ...prev, sgcLink: e.target.value }))}
+                    className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl p-4 text-sm font-bold"
+                    placeholder="https://sgc..."
                   />
                 </div>
 

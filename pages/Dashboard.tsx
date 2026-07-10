@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Crown, Flag, Loader2, Target, Trophy } from 'lucide-react';
+import { ArrowUpRight, Crown, Flag, Target, Trophy } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
+
 import { NeonCard } from '../components/NeonCard';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade, Usuario } from '../types';
 import * as fs from '../services/firestoreDb';
@@ -65,14 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate }) => {
   const activeQuarter = quarters.find(quarter => quarter.status === 'ACTIVE') || quarters[0];
   const totalPoints = ranking.reduce((sum, row) => sum + row.total, 0);
 
-  if (loading) {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-[#E53935]" size={40} />
-        <p className="text-gray-500 font-bold uppercase text-[10px] mt-4 tracking-widest">Carregando central do Clubão...</p>
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   return (
     <div className="space-y-8 pb-10">

@@ -47,6 +47,7 @@ export interface Clube {
   nome: string;
   publicSlug?: string;
   varToken?: string;
+  maintenanceMode?: boolean;
 }
 
 export interface MemberInstructorSpecialty {
@@ -82,6 +83,9 @@ export interface Unidade {
   sexo?: 'M' | 'F' | 'MISTO';
   participatesClubao?: boolean;
   imageUrl?: string;
+  sgcLink?: string;
+  // Controle manual de movimentação semanal no ranking público. null/undefined = automático (baseado em atividade real).
+  manualMovimentoSemana?: boolean | null;
 }
 
 export interface Classe {
@@ -221,7 +225,7 @@ export interface Parcela {
 
 export interface Despesa { id: string; clubeId: string; valor: number; descricao: string; data: string; categoria?: string; unidadeId?: string; campanhaId?: string; }
 export interface Doacao { id: string; clubeId: string; valor: number; doador: string; data: string; socioId?: string; referenciaMes?: string; tipo?: string; observacao?: string; unidadeId?: string; }
-export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; mesIngresso?: string; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; indicadoPorMembroId?: string; }
+export interface Socio { id: string; clubeId: string; nome: string; valorMensal: number; ativo: boolean; mesIngresso?: string; trimestreRef?: string; previsaoPagamento?: string; unidadeId?: string; telefone?: string; email?: string; diaVencimento?: number; desbravadorId?: string; indicadoPorMembroId?: string; }
 export interface PagamentoSocio { id: string; clubeId: string; socioId: string; dataPagamento: string; valorPago: number; mesReferencia: string; observacao?: string; }
 
 export interface CampanhaVenda {
@@ -369,6 +373,18 @@ export interface RankingRequirement extends Omit<RankingRequirementSeed, 'quarte
   origem: 'PADRAO' | 'CUSTOM';
 }
 
+export type RequirementSubmissionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface RequirementSubmission {
+  status: RequirementSubmissionStatus;
+  observation?: string;
+  submittedBy?: { id: string; nome: string };
+  submittedAt?: any;
+  reviewedBy?: { id: string; nome: string };
+  reviewedAt?: any;
+  rejectionReason?: string;
+}
+
 export interface RankingProgressEntry {
   requirementId: string;
   completed: boolean;
@@ -384,6 +400,7 @@ export interface RankingProgressEntry {
   updatedAt?: any;
   updatedBy?: { id: string; nome: string; email?: string; };
   validacaoMeta?: ValidacaoMeta;
+  submission?: RequirementSubmission;
 }
 
 export interface ValidacaoMeta {
@@ -447,6 +464,12 @@ export interface RankingUnitProgressDoc {
   resultados: Record<string, RankingProgressEntry>;
   firstSavedAt?: any;
   updatedAt?: any;
+}
+
+// Resultado por unidade do cálculo de engajamento (público, sem dados individuais)
+export interface EngagementRow {
+  unidade: Unidade;
+  hasMovement: boolean; // teve alguma atividade nos últimos 7 dias
 }
 
 // --- REUNIÃO E CHAMADA (PRESENÇA) ---
@@ -518,4 +541,18 @@ export interface VarConfig {
   lastAccessAt?: any;
   createdAt?: any;
   updatedAt?: any;
+}
+
+// DNA da Unidade — indicadores estratégicos derivados de dados existentes (read-only).
+export interface UnitDnaData {
+  rankingPercent: number | null;      // 0-1; null se sem trimestre ativo
+  rankingStars: 3 | 4 | 5 | null;     // null se rankingPercent === null
+  rankingCompletedCount: number;
+  rankingTotalRequirements: number;
+  frequencyPercent: number | null;    // 0-100; null se sem reuniões/membros
+  frequencyMemberCount: number;
+  frequencyTotalMeetings: number;
+  classesAvgPercent: number | null;   // 0-100; null se nenhum desbravador com classe
+  classesCompletedCount: number;      // desbravadores com 100% na classe atual
+  classesMemberCount: number;         // desbravadores com classeId atribuído
 }

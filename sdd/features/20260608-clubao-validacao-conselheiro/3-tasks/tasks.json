@@ -1,0 +1,50 @@
+{
+  "feature": "clubao-validacao-conselheiro",
+  "strategy": "batched",
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Modelo de dados — submissão por requisito",
+      "layer": "1-data",
+      "files": ["types.ts"],
+      "description": "Adicionar RequirementSubmissionStatus, RequirementSubmission e campo opcional submission em RankingProgressEntry.",
+      "status": "pending"
+    },
+    {
+      "id": "TASK-002",
+      "title": "Serviço — submeter/retirar/revisar requisito",
+      "layer": "2-service",
+      "files": ["services/firestoreDb.ts"],
+      "description": "submitRequirementByCounselor, withdrawRequirementSubmission, reviewRequirementSubmission com merge parcial e recálculo de totalPoints reaproveitando calculateRequirementBreakdown.",
+      "depends_on": ["TASK-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-003",
+      "title": "Teste unitário do fluxo de revisão",
+      "layer": "2-service",
+      "files": ["services/__tests__/clubaoValidacao.test.ts"],
+      "description": "APPROVE aplica pontos e soma totalPoints; REJECT zera; PENDENTE não soma.",
+      "depends_on": ["TASK-002"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-004",
+      "title": "DNA — seletor de trimestre + lista do conselheiro",
+      "layer": "3-ui",
+      "files": ["components/UnitDna/UnitDnaPanel.tsx", "components/UnitDna/CounselorRequirementsList.tsx"],
+      "description": "Seletor ativo/anterior, modo leitura no anterior, lista de marcação de requisitos elegíveis (RN-5) para CONSELHEIRO/INSTRUTOR com unidadeId.",
+      "depends_on": ["TASK-002"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-005",
+      "title": "Clubão — aba Validação por Unidade (diretoria)",
+      "layer": "3-ui",
+      "files": ["pages/Clubao.tsx", "components/Aprovacoes/AprovacoesPanel.tsx", "components/Aprovacoes/AprovacaoUnitModal.tsx"],
+      "description": "Nova aba 'aprovacoes' listando unidades com contadores e modal de aprovar/reprovar com motivo.",
+      "depends_on": ["TASK-002"],
+      "status": "pending"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { 
-  Flag, LayoutDashboard, LogOut, Target, Trophy, Users, DollarSign, CalendarClock, Music2
+import {
+  Flag, LayoutDashboard, LogOut, Target, Trophy, Users, DollarSign, CalendarClock, Music2, Wrench
 } from 'lucide-react';
 import { PerfilAcesso } from '../types';
 
@@ -11,14 +11,16 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  maintenanceMode?: boolean;
+  onToggleMaintenance?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTab, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTab, onLogout, maintenanceMode, onToggleMaintenance }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO, PerfilAcesso.INSTRUTOR] },
     { id: 'units', label: 'Unidades', icon: Flag, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
     { id: 'membros', label: 'Membros', icon: Users, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
-    { id: 'fanfarra', label: 'Fanfarra', icon: Music2, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
+    // { id: 'fanfarra', label: 'Fanfarra', icon: Music2, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] }, // oculto — manter para uso futuro
     { id: 'reunioes', label: 'Reuniões', icon: CalendarClock, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
     { id: 'financeiro', label: 'Financeiro', icon: DollarSign, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.FINANCEIRO] },
     { id: 'clubao', label: 'Clubão', icon: Target, roles: [PerfilAcesso.DIRETORIA, PerfilAcesso.CONSELHEIRO] },
@@ -60,9 +62,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ perfil, activeTab, setActiveTa
         })}
       </nav>
 
-      <button 
+      {perfil === PerfilAcesso.DIRETORIA && onToggleMaintenance && (
+        <button
+          onClick={onToggleMaintenance}
+          className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all border mb-2 ${
+            maintenanceMode
+              ? 'bg-yellow-500/15 text-yellow-400 border-yellow-500/40'
+              : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 border-transparent hover:border-yellow-500/20'
+          }`}
+        >
+          <Wrench size={18} className={maintenanceMode ? 'text-yellow-400' : ''} />
+          <div className="flex flex-col items-start">
+            <span className="font-bold text-sm leading-none">Manutenção</span>
+            <span className={`text-[10px] font-bold mt-0.5 uppercase tracking-wider ${maintenanceMode ? 'text-yellow-400' : 'text-gray-600'}`}>
+              {maintenanceMode ? 'ATIVO' : 'INATIVO'}
+            </span>
+          </div>
+        </button>
+      )}
+
+      <button
         onClick={onLogout}
-        className="flex items-center gap-3 px-4 py-4 rounded-xl text-red-400 hover:bg-red-500/10 transition-all mt-auto border border-transparent hover:border-red-500/20"
+        className="flex items-center gap-3 px-4 py-4 rounded-xl text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
       >
         <LogOut size={18} />
         <span className="font-bold text-sm">Encerrar Sessão</span>

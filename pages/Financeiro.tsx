@@ -37,6 +37,7 @@ import {
 } from '../types';
 import * as fs from '../services/firestoreDb';
 import { Modal } from '../components/Modal';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 interface FinanceiroProps {
   user: Usuario;
@@ -247,6 +248,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
   const [socioNome, setSocioNome] = useState('');
   const [socioValor, setSocioValor] = useState('');
   const [socioMesIngresso, setSocioMesIngresso] = useState(getCurrentMesRef());
+  const [socioTrimestre, setSocioTrimestre] = useState('');
   const [socioUnidadeId, setSocioUnidadeId] = useState('');
   const [socioIndicadoPorId, setSocioIndicadoPorId] = useState('');
 
@@ -814,6 +816,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           nome: socioNome,
           valorMensal: parseFloat(socioValor),
           mesIngresso: socioMesIngresso || undefined,
+          trimestreRef: socioTrimestre || undefined,
           unidadeId: socioUnidadeId || undefined,
           indicadoPorMembroId: socioIndicadoPorId || undefined,
         });
@@ -823,6 +826,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
           valorMensal: parseFloat(socioValor),
           ativo: true,
           mesIngresso: socioMesIngresso || undefined,
+          ...(socioTrimestre ? { trimestreRef: socioTrimestre } : {}),
           ...(socioUnidadeId ? { unidadeId: socioUnidadeId } : {}),
           ...(socioIndicadoPorId ? { indicadoPorMembroId: socioIndicadoPorId } : {}),
         });
@@ -832,6 +836,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       setSocioNome('');
       setSocioValor('');
       setSocioMesIngresso(getCurrentMesRef());
+      setSocioTrimestre('');
       setSocioUnidadeId('');
       setSocioIndicadoPorId('');
       await loadAll();
@@ -2528,6 +2533,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
                           setSocioNome(socio.nome);
                           setSocioValor(String(socio.valorMensal));
                           setSocioMesIngresso(socio.mesIngresso || getCurrentMesRef());
+                          setSocioTrimestre(socio.trimestreRef || '');
                           setSocioUnidadeId(socio.unidadeId || '');
                           setSocioIndicadoPorId(socio.indicadoPorMembroId || '');
                           setIsSocioModalOpen(true);
@@ -2905,9 +2911,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       </header>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <div className="w-10 h-10 border-4 border-[#1F2937] border-t-[#E53935] rounded-full animate-spin" />
-        </div>
+        <LoadingScreen inline />
       ) : (
         <>
           {activeTab === 'GERAL' && renderGeral()}
@@ -3204,7 +3208,7 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
       </Modal>
 
       {/* 4. Modal: Sócio */}
-      <Modal isOpen={isSocioModalOpen} onClose={() => { if (!isSaving) { setIsSocioModalOpen(false); setEditingSocio(null); setSocioNome(''); setSocioValor(''); setSocioMesIngresso(getCurrentMesRef()); setSocioUnidadeId(''); setSocioIndicadoPorId(''); } }} title={editingSocio ? 'Editar Sócio' : 'Novo Sócio'}>
+      <Modal isOpen={isSocioModalOpen} onClose={() => { if (!isSaving) { setIsSocioModalOpen(false); setEditingSocio(null); setSocioNome(''); setSocioValor(''); setSocioMesIngresso(getCurrentMesRef()); setSocioTrimestre(''); setSocioUnidadeId(''); setSocioIndicadoPorId(''); } }} title={editingSocio ? 'Editar Sócio' : 'Novo Sócio'}>
         <form onSubmit={handleSaveSocio} className="space-y-4">
           <div>
             <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Nome do Patrocinador</label>
@@ -3252,6 +3256,21 @@ export const Financeiro: React.FC<FinanceiroProps> = ({ user }) => {
               {unidades.map(u => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-black tracking-widest text-gray-500 mb-1">Trimestre Clubão (opcional)</label>
+            <select
+              value={socioTrimestre}
+              onChange={(e) => setSocioTrimestre(e.target.value)}
+              className="w-full bg-[#0B0F1A] border border-[#1F2937] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#FFD60A]"
+            >
+              <option value="">Pré-existente (sem trimestre)</option>
+              {[1, 2, 3].map(q => {
+                const year = new Date().getFullYear();
+                const val = `${year}-Q${q}`;
+                return <option key={val} value={val}>{q}º Trimestre {year}</option>;
+              })}
             </select>
           </div>
           <div>

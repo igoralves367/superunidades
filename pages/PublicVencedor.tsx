@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Crown, Loader2, Trophy, Medal } from 'lucide-react';
+import { Crown, Trophy, Medal } from 'lucide-react';
+import { LoadingScreen } from '../components/LoadingScreen';
 import * as fs from '../services/firestoreDb';
 import { buildRankingRows } from '../services/ranking';
 import { RankingQuarter, RankingRequirement, RankingUnitProgressDoc, Unidade } from '../types';
@@ -198,7 +199,7 @@ export const PublicVencedor: React.FC = () => {
         await fs.syncLegacyClubaoToRanking(club.id, activeQuarter.id, fetchedRequirements.filter(r => r.active));
         const fetchedDocs = await fs.listRankingProgress(club.id, activeQuarter.id);
 
-        setUnits(fetchedUnits.filter(u => u.ativo && u.tipo !== 'DIRETORIA'));
+        setUnits(fetchedUnits.filter(u => u.ativo && u.participatesClubao !== false));
         setQuarters(fetchedQuarters.filter(q => q.ativo));
         setRequirements(fetchedRequirements.filter(r => r.active));
         setProgressDocs(fetchedDocs);
@@ -254,13 +255,7 @@ export const PublicVencedor: React.FC = () => {
   const pointsAnimated = useCountUp(leaderPoints, phase === 'reveal' && !reducedMotion, 1200);
 
   // ── Loading
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#060A14] text-gray-100 flex items-center justify-center px-4">
-        <Loader2 className="animate-spin text-[#E53935]" size={28} />
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen inline />;
 
   // ── Error
   if (errorInfo) {

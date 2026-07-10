@@ -3,6 +3,7 @@ import { Loader2, CalendarClock, ChevronDown, ChevronUp, UserX, UserCheck, Arrow
 import { Unidade, Desbravador, Cargo, Classe, Reuniao, ReuniaoPresenca } from '../types';
 import * as fs from '../services/firestoreDb';
 import { formatarCargo } from './Membros';
+import { getCurrentClubQuarter } from '../services/trimestre';
 
 const getPublicRouteValue = () => {
   const hash = window.location.hash || '';
@@ -42,7 +43,7 @@ export const PublicChamada: React.FC = () => {
   const [reunioes, setReunioes] = useState<Reuniao[]>([]);
   const [presencas, setPresencas] = useState<ReuniaoPresenca[]>([]);
 
-  const [trimestre, setTrimestre] = useState<number>(1);
+  const [trimestre, setTrimestre] = useState<1 | 2 | 3>(getCurrentClubQuarter());
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
   const [selectedReuniaoId, setSelectedReuniaoId] = useState<string | null>(null);
   const routeValue = getPublicRouteValue();
@@ -58,7 +59,7 @@ export const PublicChamada: React.FC = () => {
       setClubeNome(clube.nome);
       setClubeId(clube.id);
 
-      const currentQuarter = 1; // Março, Abril e Maio como Trimestre 1
+      const currentQuarter = getCurrentClubQuarter();
       setTrimestre(currentQuarter);
 
       const settled = await Promise.allSettled([
@@ -107,8 +108,10 @@ export const PublicChamada: React.FC = () => {
     loadData();
   }, [routeValue]);
 
-  const handleQuarterChange = async (newQ: number) => {
+  const handleQuarterChange = async (newQ: 1 | 2 | 3) => {
     setTrimestre(newQ);
+    setSelectedReuniaoId(null);
+    setExpandedUnitId(null);
     if (!clubeId) return;
     setLoading(true);
     try {
@@ -224,10 +227,29 @@ export const PublicChamada: React.FC = () => {
             </div>
             
             <div className="inline-flex items-center justify-center mt-2 border border-[#E53935]/30 bg-[#E53935]/10 px-5 py-2.5 rounded-2xl">
-              <span className="text-sm font-black text-white tracking-widest uppercase">1º Trimestre</span>
+              <span className="text-sm font-black text-white tracking-widest uppercase">{trimestre}º Trimestre</span>
             </div>
           </div>
         </header>
+
+        <nav className="max-w-4xl mx-auto flex items-center justify-center gap-2" aria-label="Selecionar trimestre">
+          {([1, 2, 3] as const).map(q => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => handleQuarterChange(q)}
+              disabled={loading}
+              aria-pressed={trimestre === q}
+              className={`min-w-16 px-4 py-2.5 rounded-xl border text-sm font-black transition-all disabled:opacity-60 ${
+                trimestre === q
+                  ? 'bg-[#E53935] border-[#E53935] text-white shadow-[0_0_18px_rgba(229,57,53,0.28)]'
+                  : 'bg-[#111827] border-[#1F2937] text-gray-400 hover:text-white hover:border-[#E53935]/50'
+              }`}
+            >
+              {q}º
+            </button>
+          ))}
+        </nav>
 
       <main className="max-w-4xl mx-auto relative z-10">
         {!selectedReuniaoId ? (

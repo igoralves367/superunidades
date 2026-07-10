@@ -14,6 +14,7 @@ interface ReunioesProps {
 
 import { buildFrequencySummary } from '../services/frequencia';
 import type { UnitFrequencySummary } from '../services/frequencia';
+import { getCurrentClubQuarter } from '../services/trimestre';
 export { buildFrequencySummary };
 
 function freqColor(pct: number | null): string {
@@ -34,7 +35,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   const [newData, setNewData] = useState<string>('');
   const [newTipo, setNewTipo] = useState<string>('Reunião Regular');
   const [newTituloCustom, setNewTituloCustom] = useState('');
-  const [newQuarter, setNewQuarter] = useState<1 | 2 | 3 | 4>(1);
+  const [newQuarter, setNewQuarter] = useState<1 | 2 | 3>(getCurrentClubQuarter());
 
   // Modal editar
   const [editReuniao, setEditReuniao] = useState<Reuniao | null>(null);
@@ -42,7 +43,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   const [editData, setEditData] = useState('');
   const [editTipo, setEditTipo] = useState<string>('Reunião Regular');
   const [editTituloCustom, setEditTituloCustom] = useState('');
-  const [editQuarter, setEditQuarter] = useState<1 | 2 | 3 | 4>(1);
+  const [editQuarter, setEditQuarter] = useState<1 | 2 | 3>(1);
 
   // States do Relatorio
   const [reportReuniao, setReportReuniao] = useState<Reuniao | null>(null);
@@ -51,10 +52,8 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
 
   // States do Resumo Trimestral
   const [activeView, setActiveView] = useState<'agenda' | 'resumo'>('agenda');
-  const [summaryQuarter, setSummaryQuarter] = useState<1 | 2 | 3 | 4>(() => {
-    const m = new Date().getMonth();
-    return (Math.floor(m / 3) + 1) as 1 | 2 | 3 | 4;
-  });
+  const [agendaQuarter, setAgendaQuarter] = useState<1 | 2 | 3>(getCurrentClubQuarter());
+  const [summaryQuarter, setSummaryQuarter] = useState<1 | 2 | 3>(getCurrentClubQuarter());
   const [summaryData, setSummaryData] = useState<UnitFrequencySummary[] | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
 
@@ -99,8 +98,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
 
   useEffect(() => {
     loadData();
-    const month = new Date().getMonth();
-    setNewQuarter(Math.floor(month / 3) + 1 as 1|2|3|4);
+    setNewQuarter(getCurrentClubQuarter());
   }, [user.clubeId]);
 
   useEffect(() => {
@@ -154,7 +152,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
     const isCustom = !MEETING_TYPES.slice(0, -1).includes(reu.titulo as any);
     setEditReuniao(reu);
     setEditData(reu.data);
-    setEditQuarter(reu.trimestre ?? 1);
+    setEditQuarter((reu.trimestre && reu.trimestre <= 3 ? reu.trimestre : 1) as 1 | 2 | 3);
     setEditTipo(isCustom ? 'Outros' : (reu.titulo ?? 'Reunião Regular'));
     setEditTituloCustom(isCustom ? (reu.titulo ?? '') : '');
   };
@@ -204,8 +202,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
   if (loading) return <LoadingScreen inline />;
 
   const publicLink = `${window.location.origin}/#agenda/${clubSlug}`;
-  const currentQuarter = (Math.floor(new Date().getMonth() / 3) + 1) as 1 | 2 | 3 | 4;
-  const trimestres = [currentQuarter] as const;
+  const trimestres = [1, 2, 3] as const;
 
   const totalMeetingsSummary = summaryData?.[0]?.totalMeetings ?? 0;
 
@@ -263,10 +260,31 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
         </button>
       </div>
 
+      {activeView === 'agenda' && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-black uppercase tracking-widest text-gray-500">Trimestre</span>
+          <div className="flex gap-2">
+            {trimestres.map(q => (
+              <button
+                key={q}
+                onClick={() => setAgendaQuarter(q)}
+                className={`px-3 py-1.5 rounded-lg font-bold text-sm transition-all ${
+                  agendaQuarter === q
+                    ? 'bg-[#E53935] text-white'
+                    : 'border border-[#1F2937] bg-[#111827] text-gray-400 hover:text-white'
+                }`}
+              >
+                {q}º
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Visão Agenda */}
       {activeView === 'agenda' && (
         <>
-          {trimestres.map(trimestre => {
+          {trimestres.filter(trimestre => trimestre === agendaQuarter).map(trimestre => {
             const reusTrimestre = reunioes.filter(r => r.trimestre === trimestre);
             if (reusTrimestre.length === 0) return null;
 
@@ -314,10 +332,10 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
             );
           })}
 
-          {reunioes.length === 0 && (
+          {reunioes.filter(r => r.trimestre === agendaQuarter).length === 0 && (
             <div className="text-center py-20 bg-[#111827]/50 rounded-2xl border border-dashed border-[#1F2937]">
               <CalendarClock size={40} className="mx-auto text-gray-600 mb-4" />
-              <p className="text-gray-400 font-bold">Nenhuma reunião cadastrada.</p>
+              <p className="text-gray-400 font-bold">Nenhuma reunião cadastrada para o {agendaQuarter}º trimestre.</p>
             </div>
           )}
         </>
@@ -330,7 +348,7 @@ export const Reunioes: React.FC<ReunioesProps> = ({ user }) => {
           <div className="flex items-center gap-3">
             <span className="text-xs font-black uppercase tracking-widest text-gray-500">Trimestre</span>
             <div className="flex gap-2">
-              {([1, 2, 3, 4] as const).map(q => (
+              {trimestres.map(q => (
                 <button
                   key={q}
                   onClick={() => setSummaryQuarter(q)}

@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { calculateRequirementBreakdown, generateUnitCode } from '../services/ranking';
 import { computeEngagementRows } from '../services/engagement';
+import { resolveRequirementDisplayStatus } from '../services/clubaoSubmission';
 import { DnaIndicatorCard } from '../components/UnitDna/DnaIndicatorCard';
 import { calcDnaStars } from '../components/UnitDna/dnaClasses';
 import { useToast } from '../store/ToastContext';
@@ -460,7 +461,7 @@ const ActiveQuarterEditor: React.FC<ActiveQuarterEditorProps> = ({
     setResultados(doc?.resultados ?? {});
   };
 
-  const statusOf = (reqId: string) => resultados[reqId]?.submission?.status ?? 'NONE';
+  const statusOf = (reqId: string) => resolveRequirementDisplayStatus(resultados[reqId]);
 
   const getDraft = (req: RankingRequirement) => {
     const entry = resultados[req.id];

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildSubmittedEntry, buildApprovedEntry, buildRejectedEntry, sumTotalPoints } from './clubaoSubmission';
+import {
+  buildSubmittedEntry,
+  buildApprovedEntry,
+  buildRejectedEntry,
+  resolveRequirementDisplayStatus,
+  sumTotalPoints
+} from './clubaoSubmission';
 import type { RankingProgressEntry, RankingRequirement } from '../types';
 
 const makeReq = (overrides: Partial<RankingRequirement> = {}): RankingRequirement => ({
@@ -22,6 +28,23 @@ const reviewer = { id: 'dir1', nome: 'Diretor' };
 const counselor = { id: 'con1', nome: 'Conselheiro' };
 
 describe('clubaoSubmission', () => {
+  it('exibe como aprovado quando a diretoria marcou o requisito diretamente', () => {
+    const entry = buildApprovedEntry(makeReq(), undefined, reviewer, 1);
+    delete entry.submission;
+
+    expect(resolveRequirementDisplayStatus(entry)).toBe('APPROVED');
+  });
+
+  it('mantém o status da submissão quando ainda não existe resultado definitivo', () => {
+    const pending = buildSubmittedEntry(makeReq().id, undefined, {}, counselor, 1);
+
+    expect(resolveRequirementDisplayStatus(pending)).toBe('PENDING');
+  });
+
+  it('exibe como não enviado quando não existe resultado nem submissão', () => {
+    expect(resolveRequirementDisplayStatus(undefined)).toBe('NONE');
+  });
+
   it('submissão fica PENDENTE e não soma pontos', () => {
     const entry = buildSubmittedEntry('q1-classe-biblica', undefined, { observation: 'feito' }, counselor, 1);
     expect(entry.submission?.status).toBe('PENDING');

@@ -1,4 +1,8 @@
-import { RankingProgressEntry, RankingRequirement } from '../types';
+import {
+  RankingProgressEntry,
+  RankingRequirement,
+  RequirementSubmissionStatus
+} from '../types';
 import { calculateRequirementBreakdown } from './ranking';
 
 export const emptyEntry = (requirementId: string): RankingProgressEntry => ({
@@ -13,6 +17,26 @@ export const emptyEntry = (requirementId: string): RankingProgressEntry => ({
   penaltyPoints: 0,
   calculatedPoints: 0
 });
+
+/**
+ * Resolve o status exibido para a unidade.
+ *
+ * A diretoria pode validar um requisito diretamente no painel do Clubão,
+ * sem passar pelo fluxo de submissão do conselheiro. Nessa situação não há
+ * `submission.status`, mas o resultado já é definitivo e deve aparecer como
+ * aprovado no painel da unidade.
+ */
+export const resolveRequirementDisplayStatus = (
+  entry?: RankingProgressEntry
+): RequirementSubmissionStatus | 'NONE' => {
+  const hasValidatedResult =
+    entry?.completed === true ||
+    Number(entry?.calculatedPoints || 0) > 0 ||
+    entry?.validacaoMeta?.confirmadoRanking === true;
+
+  if (hasValidatedResult) return 'APPROVED';
+  return entry?.submission?.status ?? 'NONE';
+};
 
 // Entrada PENDENTE: conselheiro marcou, pontos ainda não aplicados.
 export const buildSubmittedEntry = (

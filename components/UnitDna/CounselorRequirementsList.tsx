@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Clock, XCircle, Lock, Send, Loader2 } from 'lucide-react';
-import { RankingProgressEntry, RankingRequirement, RequirementSubmissionStatus, Usuario } from '../../types';
+import { RankingProgressEntry, RankingRequirement, Usuario } from '../../types';
 import * as fs from '../../services/firestoreDb';
+import { resolveRequirementDisplayStatus } from '../../services/clubaoSubmission';
 
 interface CounselorRequirementsListProps {
   clubeId: string;
@@ -12,9 +13,6 @@ interface CounselorRequirementsListProps {
   resultados: Record<string, RankingProgressEntry>;
   onChanged: () => void;
 }
-
-const statusOf = (entry?: RankingProgressEntry): RequirementSubmissionStatus | 'NONE' =>
-  entry?.submission?.status ?? 'NONE';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
   NONE: { label: 'Não enviado', className: 'text-gray-400 border-gray-700', icon: null },
@@ -96,7 +94,7 @@ export const CounselorRequirementsList: React.FC<CounselorRequirementsListProps>
     <div className="space-y-3">
       {requirements.map(req => {
         const entry = resultados[req.id];
-        const status = statusOf(entry);
+        const status = resolveRequirementDisplayStatus(entry);
         const badge = STATUS_BADGE[status];
         const isApproved = status === 'APPROVED';
         const isPending = status === 'PENDING';
